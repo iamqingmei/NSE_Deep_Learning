@@ -13,21 +13,9 @@ from class_weight import create_class_weight
 from collections import Counter
 import app_dataset
 import manual_dataset
-import pandas as pd
 # import itchat
 
 
-# TODO 1. temperature add to car bus model
-# TODO 1. the max velocity during the last 10 minutes
-# TODO 1. during the 10 minutes, the std_velocity
-# TODO 2. during 10 min, the number of stationary.
-# TODO 3. # of stops in bus stop
-# TODO 4. during the last 10 min, distance between the latest the stationary point and neatest bus station
-
-3
-# TODO 1. threshold based STOP detect ** need to find an optimal value
-# TODO
-# TODO
 begin_time = datetime.datetime.now()
 train_opt = {'batch_size': 32, 'epochs': 200, 'window_size': 6, 'DLNetwork': 'FULL', 'num_test': 0.333,
              'test_opt': 'random', 'l2': 0.00001,
@@ -132,30 +120,6 @@ def main():
                                                  np.array(triplet_test_win_df['win_label']))
     write += write_trip
 
-    # Save the predicted result into a csv
-    # features = app_win_df_test.append(manual_win_df_test)
-    #
-    # # each win label is assigned to the last pt in the win
-    # lat_idx = DL_FEATURES.index('WLATITUDE') + len(DL_FEATURES) * (train_opt['window_size'] - 1)
-    # lon_idx = DL_FEATURES.index('WLONGITUDE') + len(DL_FEATURES) * (train_opt['window_size'] - 1)
-    # lat_lon = features.iloc[:, [lat_idx, lon_idx]]
-    # lat_lon.columns = ['WLATITUDE', 'WLONGITUDE']
-    #
-    # min_lon_sg = 103.565276
-    # max_lon_sg = 104
-    # min_lat_sg = 1.235578
-    # max_lat_sg = 1.479055
-    #
-    # lat_lon['WLATITUDE'] = lat_lon['WLATITUDE'].apply(lambda x: x * (max_lat_sg - min_lat_sg) + min_lat_sg)
-    # lat_lon['WLONGITUDE'] = lat_lon['WLONGITUDE'].apply(lambda x: x * (max_lon_sg - min_lon_sg) + min_lon_sg)
-    #
-    # result_labels = triplet_model.predict(np.array(triplet_test_win_df.iloc[:, :-1]))
-    # result_labels = np.argmax(result_labels, 1)
-    #
-    # df_to_save = pd.DataFrame(np.array(lat_lon), columns=['WLATITUDE', 'WLONGITUDE'])
-    # df_to_save['pt_label'] = pd.Series(result_labels)
-    # df_to_save['gt_label'] = pd.Series(np.array(triplet_test_win_df['win_label']))
-    # df_to_save.to_csv('./triplet_test_result_pt.csv')
 
     # ~~~~~~~~~~~~~~ Evaluate walk VS stop ~~~~~~~~~~~~~~
     walk_stop_test_win_df = app_win_df_test.copy()
