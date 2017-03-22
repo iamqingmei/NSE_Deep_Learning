@@ -2,7 +2,7 @@
 Helper functions and data types.
 """
 
-from itertools import tee, izip
+from itertools import tee
 import math
 import pandas as pd
 from operator import eq
@@ -58,7 +58,7 @@ def sliding_window(iterable, size):
     for i in xrange(1, size):
         for each in iters[i:]:
             next(each, None)
-    return izip(*iters)
+    return zip(*iters)
     
                     
 def print_full_dataframe(df):

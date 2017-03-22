@@ -34,7 +34,7 @@ def normalize(features_df):
         mrt_dist_list = features_df['METRO_DIST'].tolist()
 
         valid_mrt_bool = list(i!=-1 for i in mrt_dist_list)
-        valid_mrt_dist = filter(lambda a: a != -1.0, mrt_dist_list)
+        valid_mrt_dist = list(filter(lambda a: a != -1.0, mrt_dist_list))
         scaled_mrt = [0] * len(mrt_dist_list)
         if len(valid_mrt_dist)>0:
             scaled_valid_mrt = gaussian_fun(valid_mrt_dist, 'METRO_DIST')
@@ -51,7 +51,7 @@ def normalize(features_df):
         bus_dist_list = features_df['BUS_DIST'].tolist()
 
         valid_bus_bool = list(i != -1 for i in bus_dist_list)
-        valid_bus_dist = filter(lambda a: a != -1.0, bus_dist_list)
+        valid_bus_dist = list(filter(lambda a: a != -1.0, bus_dist_list))
         scaled_bus = [0] * len(bus_dist_list)
         if len(valid_bus_dist)>0:
             scaled_valid_bus = gaussian_fun(valid_bus_dist, 'BUS_DIST')
@@ -71,7 +71,7 @@ def normalize(features_df):
             min_lat_sg = 1.235578
             max_lat_sg = 1.479055
             lat_list = features_df['WLATITUDE']
-            lat_list = list(map(lambda x: (x-min_lat_sg)/(max_lat_sg - min_lat_sg) * (~np.isnan(x)), lat_list))
+            lat_list = list(map(lambda x: (x-min_lat_sg)/(max_lat_sg - min_lat_sg) *(~np.isnan(x)), lat_list))
 
             #  remove nan in lat_list
             for i in range(len(lat_list)):

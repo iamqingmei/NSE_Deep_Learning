@@ -10,7 +10,6 @@ from collections import defaultdict
 import logging
 import numpy as np
 import os
-from itertools import ifilter
 
 from predict_mode import AbstractPredictor, getStartEndIdx
 from predict_mode import MODE_STOP_OUT, MODE_STOP_IN, MODE_WALK_OUT, MODE_WALK_IN, MODE_TRAIN, MODE_BUS, MODE_CAR, MODE_TBD
@@ -286,7 +285,7 @@ class TrainPredictor(AbstractPredictor):
 
         # chunk is a tuple (start_idx, end_idx, mode)
         # go through each CAR, BUS and TRAIN chunk
-        for start_idx, end_idx, _ in ifilter(lambda chunk: chunk[2] in [MODE_CAR, MODE_BUS, MODE_TRAIN],
+        for start_idx, end_idx, _ in filter(lambda chunk: chunk[2] in [MODE_CAR, MODE_BUS, MODE_TRAIN],
                                              chunks(modes, include_values=True)):
             # test for distance first
             lat_seg = lat[start_idx:end_idx]

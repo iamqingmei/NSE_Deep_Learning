@@ -4,7 +4,7 @@ import pandas as pd
 def balance_windows(win_df):
 
     labels_count_dict = Counter(win_df['win_label'])
-    print labels_count_dict
+    print (labels_count_dict)
     # min_numoflabels = min(labels_count_dict.values())
     # max_numoflabels = max(labels_count_dict.values())
     # print "the min number is : "
@@ -20,7 +20,7 @@ def balance_windows(win_df):
     # label_with_maxOccurrance (label, number of occurance)
     # print label_with_maxOccurrance
 
-    print "original size of win_df: " + str(len(win_df))
+    print ("original size of win_df: " + str(len(win_df)))
 
     for cur_label in set(win_df['win_label'].tolist()):
         if cur_label == label_with_maxOccurrance[0]:
@@ -41,9 +41,9 @@ def balance_windows(win_df):
         # else:
         #     print "no need to copy"
 
-    print "after balance: "
+    print ("after balance: ")
     labels_count_dict = Counter(win_df['win_label'])
-    print labels_count_dict
+    print (labels_count_dict)
 
     return win_df
 

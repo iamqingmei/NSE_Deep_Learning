@@ -1,5 +1,4 @@
 import numpy as np
-from sets import Set
 import logging
 import datetime
 import psycopg2
@@ -23,7 +22,7 @@ def get_manual_win_df(window_size):
     manual_features_pt = normalize(manual_features_pt[DL_FEATURES])
     # features_pt is a Data frame
 
-    print "only collect the manual labelled data with user_id = 1"
+    print("only collect the manual labelled data with user_id = 1")
 
     labels_win = cal_win_label_special_trip_dict(manual_labels_pt, window_size, trip_dict, user_id=1)
     features_win = cal_win_features_special_trip_dict(manual_features_pt, window_size, trip_dict, user_id=1)
@@ -72,7 +71,7 @@ def save_manual_pt_df(window_size):
     # get the unique (nid, date) pair to obtain data of the entire day
     all_nid = nid_date_tripnum[:, 0].tolist()
     all_date = nid_date_tripnum[:, 1].tolist()
-    unique_nid_date = Set(zip(all_nid, all_date))
+    unique_nid_date = set(zip(all_nid, all_date))
     # item in unique_nid_date_with_tripnum:
     # item[0][0] is nid, item[0][1] is date, item[1] is a list of tripnum
     unique_nid_date_with_tripnum = []

@@ -1,6 +1,5 @@
 """ all functions needed for calculating features for mode ID """
 
-from itertools import izip
 import numpy as np
 import pandas as pd
 from util import chunks_real, chunks, great_circle_dist, get_hour_SGT, moving_std, moving_dr, moving_ave_velocity
@@ -11,11 +10,27 @@ import random
 from collections import Counter
 
 
-DL_FEATURES = ['MOV_AVE_VELOCITY', 'STDACC', 'MEANMAG', 'MAXGYR', 'PRESSURE', 'STDPRES_WIN', 'NUM_AP', 'METRO_DIST',
-               'BUS_DIST', 'NOISE', 'STD_VELOCITY_10MIN']
+# ['ID', 'NID', 'SGT', 'TIMESTAMP', 'HUMIDITY', 'LIGHT', 'MODE', 'CMODE', 'NOISE', 'PRESSURE', 'STEPS', 'TEMPERATURE',
+#  'IRTEMPERATURE', 'MEANMAG', 'MEANGYR', 'STDGYR', 'STDACC', 'MAXACC', 'MAXGYR', 'MAC', 'WLATITUDE', 'WLONGITUDE',
+#  'ACCURACY', 'ID_extra', 'lat_clean', 'lon_clean', 'triplabel', 'poilabel', 'ccmode', 'gt_mode_manual',
+#  'gt_mode_google', 'gt_mode_app', 'ANALYZED_DATE', 'TIME_SGT', 'TIME_DELTA', 'STEPS_DELTA', 'DISTANCE_DELTA',
+#  'VELOCITY', 'ACCELERATION', 'MOV_AVE_VELOCITY', 'MOV_AVE_ACCELERATION', 'BUS_DIST', 'METRO_DIST', 'STDMEAN_MAG_WIN',
+#  'drMEAN_MAG_WIN', 'STDPRES_WIN', 'GT_MODE_APP', 'NUM_AP', 'is_localized']
 
-# DL_FEATURES = ['MOV_AVE_VELOCITY', 'STDACC', 'MEANMAG', 'MAXGYR', 'PRESSURE', 'STDPRES_WIN', 'NUM_AP', 'METRO_DIST',
-#                'BUS_DIST', 'NOISE', 'STD_VELOCITY_10MIN', 'STOP_BUSSTOP_10MIN', 'TEMPERATURE', 'TIME_DELTA']
+# todo try other features.
+
+# todo previous
+# todo
+# ['MOV_AVE_VELOCITY', 'STDACC', 'MEANMAG', 'MAXGYR', 'PRESSURE', 'STDPRES_WIN', 'NUM_AP', 'WLATITUDE',
+# 'WLONGITUDE', 'is_localized', 'METRO_DIST', 'BUS_DIST', 'STEPS', 'NOISE', 'TIME_DELTA', 'TEMPERATURE',
+# 'IRTEMPERATURE', 'HUMIDITY', 'STD_VELOCITY_10MIN', 'MAX_VELOCITY_10MIN', 'VELOCITY', 'TIMESTAMP',
+# 'STOP_10MIN', 'STOP_BUSSTOP_10MIN', 'FAST_10MIN']
+
+
+# ['MOV_AVE_VELOCITY', 'STDACC', 'MEANMAG', 'MAXGYR', 'PRESSURE', 'STDPRES_WIN', 'NUM_AP', 'METRO_DIST', 'BUS_DIST', 'NOISE']
+
+DL_FEATURES = ['MOV_AVE_VELOCITY', 'STDACC', 'MEANMAG', 'MAXGYR', 'PRESSURE', 'STDPRES_WIN', 'NUM_AP', 'METRO_DIST',
+               'BUS_DIST', 'NOISE', 'STD_VELOCITY_10MIN', 'TIME_DELTA', 'TEMPERATURE', 'STOP_BUSSTOP_10MIN']
 
 WIN_FEATURES = []
 
@@ -27,6 +42,13 @@ TRIPLET_FEATURES = ['MOV_AVE_VELOCITY', 'STDACC', 'MEANMAG', 'MAXGYR', 'PRESSURE
 
 BUS_CAR_FEATURES = ['MOV_AVE_VELOCITY', 'STDACC', 'MEANMAG', 'MAXGYR','PRESSURE', 'STDPRES_WIN', 'BUS_DIST',
                     'METRO_DIST', 'NOISE', 'TEMPERATURE', 'STOP_BUSSTOP_10MIN']
+
+VEHICLE_OR_NOT_FEATURES = ['MOV_AVE_VELOCITY', 'STDACC', 'MEANMAG', 'MAXGYR', 'PRESSURE', 'STDPRES_WIN', 'METRO_DIST',
+                    'STD_VELOCITY_10MIN']
+
+VEHICLE_TYPE_FEATURES = ['MOV_AVE_VELOCITY', 'STDACC', 'MEANMAG', 'MAXGYR','PRESSURE', 'STDPRES_WIN', 'BUS_DIST',
+                    'METRO_DIST', 'NOISE', 'TEMPERATURE', 'STOP_BUSSTOP_10MIN']
+
 BUS_VELOCITY_THRESHOLD = 5.5
 NEAR_BUS_STOP_THRESHOLD = 10
 
@@ -54,7 +76,7 @@ def calc_geo_time_features(data_frame, queried_date_str, window_size, high_veloc
     data_frame['TIME_SGT'] = pd.Series(time_SGT)
 
     # calculate time delta since the last measurement, in seconds
-    consec_timestamps = izip(data_frame[['TIMESTAMP']].values[:-1], data_frame[['TIMESTAMP']].values[1:])
+    consec_timestamps = zip(data_frame[['TIMESTAMP']].values[:-1], data_frame[['TIMESTAMP']].values[1:])
     delta_timestamps = map(lambda x: x[1][0] - x[0][0], consec_timestamps)
     if data_frame['TIME_SGT'][0] < 1.5:
         # add dt to 24 am for the first measurement when first point is within 24 am to 1.5am
@@ -70,7 +92,7 @@ def calc_geo_time_features(data_frame, queried_date_str, window_size, high_veloc
         return False
 
     # calculate steps delta since the last measurement
-    consec_steps = izip(data_frame[['STEPS']].values[:-1], data_frame[['STEPS']].values[1:])
+    consec_steps = zip(data_frame[['STEPS']].values[:-1], data_frame[['STEPS']].values[1:])
     delta_steps = map(lambda x: x[1][0] - x[0][0], consec_steps)
     # filter out negative delta_steps
     delta_steps = [dstep if dstep >= 0 else 0 for dstep in delta_steps]
@@ -82,7 +104,7 @@ def calc_geo_time_features(data_frame, queried_date_str, window_size, high_veloc
     # calculate distance delta from pairs of valid lat/lon locations that follow each other
     valid_latlon = df_validloc[['WLATITUDE', 'WLONGITUDE']].values
     dist_delta = map(lambda loc_pair: great_circle_dist(loc_pair[0], loc_pair[1], unit="meters"),
-                     izip(valid_latlon[:-1], valid_latlon[1:]))
+                     zip(valid_latlon[:-1], valid_latlon[1:]))
     # calculate time delta from pairs of valid timestamps
     valid_times = df_validloc['TIMESTAMP'].values
     time_delta = valid_times[1:] - valid_times[:-1]
@@ -187,9 +209,9 @@ def calc_extra_features(data_frame, window_size):
                         if rssi > -60:
                             count += 1
                     except Exception as inst:
-                        print inst
-                        print "mac_rssi: " + str(mac_rssi)
-                        print "loc: " + str(loc)
+                        print(inst)
+                        print("mac_rssi: " + str(mac_rssi))
+                        print("loc: " + str(loc))
                         continue
                 else:
                     continue
@@ -264,7 +286,7 @@ def rm_int_ts_outliers(data_frame):
         i_row += 1
     logging.warning("Number of rows to remove due to interleaved ts: " + str(len(row_to_remove)))
     row_to_stay = list(set(range(0, num_samples)) - set(row_to_remove))
-    print "length of row_to_stay: " + str(len(row_to_stay))
+    print("length of row_to_stay: " + str(len(row_to_stay)))
 
     # remove those rows
     df_cleaned = df_cleaned.iloc[row_to_stay]
@@ -809,7 +831,7 @@ def cal_win_label_special_trip_dict(labels, window_size, trip_dict, user_id=-1):
         if user_id != -1:
             if trip_dict[keys[key_idx + 1]][1] != user_id:
                 continue
-        for idx in xrange(window_size - 1 + trip_dict[keys[key_idx]][0], trip_dict[keys[key_idx + 1]][0]):
+        for idx in range(window_size - 1 + trip_dict[keys[key_idx]][0], trip_dict[keys[key_idx + 1]][0]):
             result.append(get_win_label(labels[idx - window_size + 1:idx + 1]))
     return result
 
@@ -826,7 +848,7 @@ def cal_win_label(labels, window_size, trip_dict):
     result = []
     keys = sorted(trip_dict.keys())
     for key_idx in range(len(keys) - 1):
-        for idx in xrange(window_size - 1 + trip_dict[keys[key_idx]], trip_dict[keys[key_idx + 1]]):
+        for idx in range(window_size - 1 + trip_dict[keys[key_idx]], trip_dict[keys[key_idx + 1]]):
             result.append(get_win_label(labels[idx - window_size + 1:idx + 1]))
     return result
 
@@ -864,7 +886,7 @@ def cal_win_features_special_trip_dict(features, window_size, trip_dict, user_id
             if trip_dict[keys[key_idx + 1]][1] != user_id:
                 continue
 
-        for idx in xrange(window_size - 1 + trip_dict[keys[key_idx]][0], trip_dict[keys[key_idx + 1]][0]):
+        for idx in range(window_size - 1 + trip_dict[keys[key_idx]][0], trip_dict[keys[key_idx + 1]][0]):
             results.append(get_win_feature(features[idx - window_size + 1:idx + 1]))
     return results
 
@@ -882,7 +904,7 @@ def cal_win_features(features, window_size, trip_dict):
     results = []
     keys = sorted(trip_dict.keys())
     for key_idx in range(len(keys) - 1):
-        for idx in xrange(window_size - 1 + trip_dict[keys[key_idx]], trip_dict[keys[key_idx + 1]]):
+        for idx in range(window_size - 1 + trip_dict[keys[key_idx]], trip_dict[keys[key_idx + 1]]):
             results.append(get_win_feature(features[idx - window_size + 1:idx + 1]))
     return results
 

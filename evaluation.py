@@ -36,7 +36,7 @@ def evaluation_report(model, label_type, features_test, labels_test, train_lengt
     if remarks is not None:
         write += '\n' + 'Remarks:' + str(remarks)
     folder_name = './' + str(label_type) + '/evaluation_report/' + \
-                  str(datetime.datetime.now().strftime("%y-%m-%d %H:%M")) + '_' + str(train_opt_dict['label_number']) +\
+                  str(datetime.datetime.now().strftime("%y-%m-%d %H-%M")) + '_' + str(train_opt_dict['label_number']) +\
                   'l_acc' + str("%.2f" % round(acc, 2)) + '/'
     #  create folder if not exists
     if save_txt or save_model:
@@ -189,13 +189,13 @@ def evaluate_single_model(model, folder_name, model_name, features_test, labels_
         # serialize weights to HDF5
         model.save_weights(folder_name + model_name + "_model.h5")
         print("Saved model to disk")
-        plot_model(model, to_file=folder_name + model_name + "_model.png", show_shapes=True)
+        #plot_model(model, to_file=folder_name + model_name + "_model.png", show_shapes=True)
 
     return write, acc
 
 
 def evaluate_overall_app(triplet_model, walk_stop_model, car_bus_model, features_test, labels_test, triplet_idx,
-                         car_bus_idx, walk_stop_idx):
+                        walk_stop_idx, car_bus_idx):
     write = "**********Evaluate Overall Result**********\n"
     write += "Using App labelled data, with 5 labels\n"
     triplet_result = triplet_model.predict(features_test[:, triplet_idx])
@@ -227,6 +227,43 @@ def evaluate_overall_app(triplet_model, walk_stop_model, car_bus_model, features
 
     return write, acc
 
+def evaluate_overall_app_2(vehicle_or_not_model, walk_stop_model, vehicle_type_model, features_test, labels_test, vehicle_or_not_idx,
+                        walk_stop_idx, vehicle_type_idx):
+    write = "**********Evaluate Overall Result**********\n"
+    write += "Using App labelled data, with 5 labels\n"
+    vehicle_or_not_result = vehicle_or_not_model.predict(features_test[:, vehicle_or_not_idx])
+    vehicle_or_not_result = np.argmax(vehicle_or_not_result, 1)
+
+    vehicle_type_result = vehicle_type_model.predict(features_test[:, vehicle_type_idx])
+    vehicle_type_result = np.argmax(vehicle_type_result, 1)
+
+    walk_stop_result = walk_stop_model.predict(features_test[:, walk_stop_idx])
+    walk_stop_result = np.argmax(walk_stop_result, 1)
+    result_label = []
+
+    for t in list(enumerate(vehicle_or_not_result)):
+        if t[1] == 0:  # stationary or stop
+            result_label.append(walk_stop_result[t[0]])
+        elif t[1] == 1:  # vehicle
+            if vehicle_type_result[t[0]] == 0:
+                result_label.append(3)
+            elif vehicle_type_result[t[0]] == 1:
+                result_label.append(4)
+            elif vehicle_type_result[t[0]] == 2:
+                result_label.append(2)
+            else:
+                print("Error in overall evaluation: wrong label!"+vehicle_type_result[t[0]] )
+        else:
+            print("Error in overall evaluation: wrong label!"+t[1])
+
+    con_matrix = confusion_matrix(labels_test, result_label)
+    acc = accuracy_score(labels_test, result_label)
+    write += str(con_matrix) + '\n'
+    write += "Classification report:\n"
+    write += str(classification_report(labels_test, result_label)) + '\n'
+
+    return write, acc
+
 
 def evaluate_overall_manual(triplet_model, car_bus_model, features_test, labels_test, triplet_idx, car_bus_idx):
     write = "**********Evaluate Overall Result**********\n"
@@ -249,6 +286,40 @@ def evaluate_overall_manual(triplet_model, car_bus_model, features_test, labels_
                 result_label.append(3)
             else:
                 result_label.append(4)
+
+    con_matrix = confusion_matrix(labels_test, result_label)
+    acc = accuracy_score(labels_test, result_label)
+    write += str(con_matrix) + '\n'
+    write += "Classification report:\n"
+    write += str(classification_report(labels_test, result_label)) + '\n'
+
+    return write, acc
+
+def evaluate_overall_manual_2(vehicle_or_not_model, vehicle_type_model, features_test, labels_test, vehicle_or_not_idx, vehicle_type_idx):
+    write = "**********Evaluate Overall Result**********\n"
+    write += "Using manual labelled data, with 4 labels\n"
+    vehicle_or_not_result = vehicle_or_not_model.predict(features_test[:, vehicle_or_not_idx])
+    vehicle_or_not_result = np.argmax(vehicle_or_not_result, 1)
+
+    vehicle_type_result = vehicle_type_model.predict(features_test[:, vehicle_type_idx])
+    vehicle_type_result = np.argmax(vehicle_type_result, 1)
+
+    result_label = []
+
+    for t in list(enumerate(vehicle_or_not_result)):
+        if t[1] == 0:  # stationary or stop
+            result_label.append(0)
+        elif t[1] == 1:  # vehicle
+            if vehicle_type_result[t[0]] == 0:
+                result_label.append(3)
+            elif vehicle_type_result[t[0]] == 1:
+                result_label.append(4)
+            elif vehicle_type_result[t[0]] == 2:
+                result_label.append(2)
+            else:
+                print("Error in overall evaluation: wrong label!"+vehicle_type_model[t[0]])
+        else:  # t[1] == 2
+            print("Error in overall evaluation: wrong label!"+t[1])
 
     con_matrix = confusion_matrix(labels_test, result_label)
     acc = accuracy_score(labels_test, result_label)

@@ -16,6 +16,17 @@ import manual_dataset
 # import itchat
 
 
+# TODO 1. temperature add to car bus model
+# TODO 1. the max velocity during the last 10 minutes
+# TODO 1. during the 10 minutes, the std_velocity
+# TODO 2. during 10 min, the number of stationary.
+# TODO 3. # of stops in bus stop
+# TODO 4. during the last 10 min, distance between the latest the stationary point and neatest bus station
+
+
+# TODO 1. threshold based STOP detect ** need to find an optimal value
+# TODO
+# TODO
 begin_time = datetime.datetime.now()
 train_opt = {'batch_size': 32, 'epochs': 200, 'window_size': 6, 'DLNetwork': 'FULL', 'num_test': 0.333,
              'test_opt': 'random', 'l2': 0.00001,
@@ -119,8 +130,6 @@ def main():
                                                  np.array(triplet_test_win_df.iloc[:, :-1]),
                                                  np.array(triplet_test_win_df['win_label']))
     write += write_trip
-
-
     # ~~~~~~~~~~~~~~ Evaluate walk VS stop ~~~~~~~~~~~~~~
     walk_stop_test_win_df = app_win_df_test.copy()
     walk_stop_test_win_df = walk_stop_test_win_df.iloc[:, walk_stop_index]
@@ -176,7 +185,7 @@ def main():
         f.write(write)
         f.close()
 
-    print write
+    print(write)
 
 
 def train_model(train_win_df):
