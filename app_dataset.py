@@ -7,14 +7,25 @@ import pandas as pd
 from dbConnPSQL import getLabelledDataAll, getMainDataPSQL2016, getTripDataPSQL2016
 from feature_calc import calc_extra_features, calc_geo_time_features, clean_geo_data, DL_FEATURES, cal_busmrt_dist
 import pickle
+import os
 
 
 def save_app_pt_df(window_size):
+    """
+    Fetch data from database and calculate feature for all the data
+    After all the calculation, save the dataframe into a csv for further uses
+    :param window_size: the window size for sliding window
+    :return: None
+    """
     # initialization
     trip_dict = {}
     trip_count = 0
     trip_dict[-1] = 0
     label_type = "app"
+
+    #  create folder if not exists
+    if not os.path.exists('./data/app/'):
+        os.makedirs('./data/app/')
 
     # conCom = """dbname='nse_mode_id' user='postgres' password='"""+dbpw_str+"""' host='localhost'"""
     conCom = """dbname='""" + params.dbname_str + """' user='""" + params.dbuser_str + """' password='""" + \

@@ -8,14 +8,25 @@ from dbConnPSQL import getLabelledDataWithNullAppLabel, getMainDataPSQL2016, get
     get_nids_with_app_label
 from feature_calc import calc_extra_features, calc_geo_time_features, clean_geo_data, DL_FEATURES, cal_busmrt_dist
 import pickle
+import os
 
 
 def save_manual_pt_df(window_size):
+    """
+    Fetch data from database and calculate feature for all the data
+    After all the calculation, save the dataframe into a csv for further uses
+    :param window_size: the window size for sliding window
+    :return: None
+    """
     # initialization
     trip_dict = {}
     trip_count = 0
     trip_dict[-1] = [0, -1]
     label_type = "manual"
+
+    #  create folder if not exists
+    if not os.path.exists('./data/manual/'):
+        os.makedirs('./data/manual/')
 
     # conCom = """dbname='nse_mode_id' user='postgres' password='"""+dbpw_str+"""' host='localhost'"""
     conCom = """dbname='""" + params.dbname_str + """' user='""" + params.dbuser_str + """' password='""" + \
@@ -54,12 +65,8 @@ def save_manual_pt_df(window_size):
     # print unique_nid_date_with_tripnum
 
     # initialization
-    features_win = []
-    labels_win = []
     features_pt = []
     labels_pt = []
-    lat_pt = []
-    lon_pt = []
     # process each [nid, date] pair, obtain data, calculate features, and process each trip
     num_iteration = len(unique_nid_date_with_tripnum)
 
@@ -93,9 +100,9 @@ def save_manual_pt_df(window_size):
         # ['MOV_AVE_ACCELERATION']['ACCELERATION']['VELOCITY']['MOV_AVE_VELOCITY']
         # ['DISTANCE_DELTA']['TIME_DELTA']['STEPS_DELTA']
         logging.info("Calculate geo and time features: ")
-        success_featCalc = calc_geo_time_features(data_frame_full, ana_date_str, window_size)
+        success_feat_calc = calc_geo_time_features(data_frame_full, ana_date_str, window_size)
 
-        if not success_featCalc:
+        if not success_feat_calc:
             continue
 
         cal_busmrt_dist(data_frame_full)
@@ -146,8 +153,6 @@ def save_manual_pt_df(window_size):
                     label_pt_tmp[i] = -1  # means no label
 
             features_pt_tmp = df_cur_trip[DL_FEATURES]
-            lat_pt += df_cur_trip['WLATITUDE'].tolist()
-            lon_pt += df_cur_trip['WLONGITUDE'].tolist()
             if len(features_pt_tmp) != len(label_pt_tmp):
                 logging.warning("the features are not matched with labels!!!!!!!!!!!!!!!!!!!!!!")
                 continue
@@ -155,13 +160,13 @@ def save_manual_pt_df(window_size):
             labels_pt += label_pt_tmp.tolist()
             features_pt += features_pt_tmp.values.tolist()
 
-            cur_user_id = trip_df_labelled.loc[(trip_df_labelled['NID'] == cur_nid) & \
-                                               (trip_df_labelled['analyzed_date'] == cur_date) & \
+            cur_user_id = trip_df_labelled.loc[(trip_df_labelled['NID'] == cur_nid) &
+                                               (trip_df_labelled['analyzed_date'] == cur_date) &
                                                (trip_df_labelled['trip_num'] == tripnum), ['user_id']].values[0][0]
             trip_dict[trip_count] = [len(features_pt), cur_user_id]
             trip_count += 1
 
-    pd.DataFrame(features_pt, columns=DL_FEATURES).to_csv('/data/manual/unnormalized_pt_features_df.csv')
-    pd.DataFrame(labels_pt, columns=['pt_label']).to_csv('/data/manual/unnormalized_pt_labels_df.csv')
+    pd.DataFrame(features_pt, columns=DL_FEATURES).to_csv('./data/manual/unnormalized_pt_features_df.csv')
+    pd.DataFrame(labels_pt, columns=['pt_label']).to_csv('./data/manual/unnormalized_pt_labels_df.csv')
     with open("./data/manual/trip_dict.txt", "wb") as fp:
         pickle.dump(trip_dict, fp)
