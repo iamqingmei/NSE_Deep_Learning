@@ -30,8 +30,8 @@ def calc_geo_time_features(data_frame, queried_date_str, window_size, high_veloc
     MOV_AVE_VELOCITY, MOV_AVE_ACCELERATION
     :param data_frame: The original dataframe, including those raw features
     :param queried_date_str: Analyzed data
-    :param window_size:
-    :param high_velocity_thresh:
+    :param window_size: Window size of sliding window
+    :param high_velocity_thresh: A threshold to determine whether the velocity is too high, unit : m/s
     :return: The status of success of feature calculation
     """
 
@@ -113,38 +113,13 @@ def calc_geo_time_features(data_frame, queried_date_str, window_size, high_veloc
     return True
 
 
-def pt_during_selected_time(df, cur_pt_idx, time):
-    """
-    return all the points in the last n second in the form of data frame
-    :param df: the whole data set
-    :param cur_pt_idx: the current idx of point in df
-    :param time: In the last n second
-    :return: all the points in the last n second
-    """
-    result_idx = 0
-    cur_time = df.iloc[cur_pt_idx]['TIMESTAMP']
-
-    stop_count = 0
-    stop_bus_stop_count = 0
-    fast_count = 0
-    for i in range(cur_pt_idx, -1, -1):
-        if cur_time - df.iloc[i]['TIMESTAMP'] > time:
-            result_idx = i+1
-            break
-        if df.iloc[i]['VELOCITY'] < BUS_VELOCITY_THRESHOLD:
-            stop_count += 1
-            if df.iloc[i]['BUS_DIST'] < NEAR_BUS_STOP_THRESHOLD:
-                if df.iloc[i]['BUS_DIST'] != -1:
-                    stop_bus_stop_count += 1
-        else:
-            fast_count += 1
-
-
-    return df.iloc[result_idx:cur_pt_idx], stop_count, stop_bus_stop_count, fast_count
-
-
 def calc_extra_features(data_frame, window_size):
-    """Calculate additional features from IMU features
+    """
+    Calculate additional features from IMU features
+    Additional features including: STDMEAN_MAG_WIN, drMEAN_MAG_WIN, STDPRES_WIN, NUM_AP, is_localized
+    :param data_frame: The original data frame
+    :param window_size: The window size of sliding windows
+    :return: None
     """
 
     # calculate the moving std, diff and dr of MEANMAG
@@ -788,22 +763,16 @@ def find_array_start_end(a, num_thresh):
 
 def cal_busmrt_dist(df, default_dist=-1):
     """
-    cal_busmrt_dist function is to calculate The BUS_DIST and METRO_DIST.
-    :param df: The DataFrame of data.
-    :param train_dist: The threshold for METRO_DIST which cannot be larger than the threshold.
-    :param bus_dist: The threshold for BUS_DIST which cannot be larger than the threshold.
-    :param default_dist: If there is no valid BUS_DIST or METRO_DIST value, default_dist will be used.
-    :return: None, the BUS_DIST and METRO_DIST will be added into the df.
+    Calculate BUS_DIST and METRO_DIST, and other features associating with BUS_DIST
+    STD_VELOCITY_10MIN, STOP_10MIN, STD_VELOCITY_10MIN
+    :param df:
+    :param default_dist:
+    :return:
     """
     train_heuristic = TransitHeuristic.TrainPredictor()
     bus_heuristic = TransitHeuristic.BusMapPredictor()
 
     TIME_THRESHOLD = 10 * 60
-    std_velocity_all = []
-    max_velocity_10min_all = []
-    stops_10min_all = []
-    fast_10min_all = []
-    stops_near_bus_stop_10min_all = []
 
     df['BUS_DIST'] = pd.Series([default_dist]*len(df))
     df['METRO_DIST'] = pd.Series([default_dist]*len(df))
@@ -822,34 +791,6 @@ def cal_busmrt_dist(df, default_dist=-1):
         if len(closeMRT) > 0:
             dist2all = [MRT[1] for MRT in closeMRT]
             df.set_value(i, 'METRO_DIST', min(dist2all))
-
-    #     recent_points, stop_count, stop_bus_stop_count, fast_count = pt_during_selected_time(df, i, TIME_THRESHOLD)
-    #
-    #     stops_10min_all.append(stop_count)
-    #     stops_near_bus_stop_10min_all.append(stop_bus_stop_count)
-    #     fast_10min_all.append(fast_count)
-    #     if (recent_points is None) or (len(recent_points) == 0):
-    #         # there is no recent points
-    #         std_velocity_all.append(0)
-    #         max_velocity_10min_all.append(0)
-    #     else:
-    #         std = np.nanstd(recent_points['VELOCITY'])
-    #         if np.isnan(std):
-    #             std_velocity_all.append(0)
-    #         else:
-    #             std_velocity_all.append(std)
-    #
-    #         m = max(recent_points['VELOCITY'])
-    #         if np.isnan(m):
-    #             max_velocity_10min_all.append(0)
-    #         else:
-    #             max_velocity_10min_all.append(m)
-    #
-    # df['MAX_VELOCITY_10MIN'] = pd.Series(max_velocity_10min_all)
-    # df['STD_VELOCITY_10MIN'] = pd.Series(std_velocity_all)
-    # df['STOP_10MIN'] = pd.Series(stops_10min_all)
-    # df['STOP_BUSSTOP_10MIN'] = pd.Series(stops_near_bus_stop_10min_all)
-    # df['FAST_10MIN'] = pd.Series(fast_10min_all)
 
     df['STOP_10MIN'] = pd.Series([0] * len(df))
     df['STOP_BUSSTOP_10MIN'] = pd.Series([0] * len(df))
@@ -900,7 +841,6 @@ def cal_busmrt_dist(df, default_dist=-1):
         df.set_value(i, 'STD_VELOCITY_10MIN', np.nanstd(df.iloc[cur_start_idx-1:i+1]['VELOCITY'].tolist()))
         df.set_value(i, 'STOP_10MIN', cur_count_stop)
         df.set_value(i, 'STOP_BUSSTOP_10MIN', cur_count_busstop_stop)
-    print("HI!")
 
 
 def random_select_idx(labels_all_list, num_test, label_number):
@@ -909,7 +849,7 @@ def random_select_idx(labels_all_list, num_test, label_number):
     :param labels_all_list: the list of labels of all the data
     :param num_test: the total number of selected samples
     :param label_number: the number of different class labels
-    :return:
+    :return: the selected index
     """
     test_idx = []
     num_test_for_each_label = num_test / label_number

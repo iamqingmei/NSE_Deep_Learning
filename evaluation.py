@@ -15,14 +15,14 @@ evaluation_report = Write("")
 
 def evaluate_single_model(model, folder_name, model_name, features_test, labels_test, save_model=True):
     """
-
-    :param model:
-    :param folder_name:
-    :param model_name:
-    :param features_test:
-    :param labels_test:
-    :param save_model:
-    :return:
+    Evaluate and Test a single model
+    :param model: The model to be tested
+    :param folder_name: The folder name to save the model
+    :param model_name: The name of the model
+    :param features_test: The features to be test
+    :param labels_test: The ground truth labals of the testing dataset
+    :param save_model: boolean, whether to save the model to disk
+    :return: predicted labels of the tesing dataset
     """
     cat_labels_test = np_utils.to_categorical(labels_test)
     loss, acc = model.evaluate(features_test, cat_labels_test, verbose=2)
@@ -210,6 +210,16 @@ def evaluate_overall_manual_2(vehicle_or_not_model, vehicle_type_model, features
 
 
 def save_predicted_result_in_csv(result_labels, df, folder_name, all_features, model_name, label_type):
+    """
+    Save the predicted result into a csv, with ground truth label, location information and trip_id
+    :param result_labels: The predicted label
+    :param df: The dataframe containing all the information
+    :param folder_name: The folder name to save
+    :param all_features: a list of all the features included in df.
+    :param model_name: The name of the model evaluated.
+    :param label_type: The type of label we are using
+    :return: None
+    """
     # Save the predicted result into a csv
 
     # each win label is assigned to the last pt in the win
@@ -237,6 +247,15 @@ def save_predicted_result_in_csv(result_labels, df, folder_name, all_features, m
 
 
 def init_write(opt, train_opt, features, manual_win_df, app_win_df):
+    """
+    Initiate the evaluation report:training options, general options, features, distribution of each class in the dataset
+    :param opt: general options
+    :param train_opt: training options
+    :param features: features used for each model
+    :param manual_win_df: the window dataframe of manually labelled data
+    :param app_win_df: the window dataframe of app labelled data
+    :return: None
+    """
     write = "Evaluation Report of Train_Hierarchical \n"
     write += str(datetime.datetime.now().strftime("%y-%m-%d %H:%M")) + '\n'
     write += "General option: \n" + str(opt) + "\n"
@@ -248,4 +267,9 @@ def init_write(opt, train_opt, features, manual_win_df, app_win_df):
 
 
 def save_write(folder_name):
+    """
+    Save the evaluation report into a folder
+    :param folder_name: The name of folder to save the evaluation report
+    :return: None
+    """
     evaluation_report.save_write(folder_name)

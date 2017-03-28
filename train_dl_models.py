@@ -12,6 +12,13 @@ from collections import Counter
 
 
 def train_model(features_train, labels_train, train_opt):
+    """
+    To train the deep learning model
+    :param features_train: The features used to train the model
+    :param labels_train: The labels used to train the model
+    :param train_opt: training options, such as l2, epoch number and batch size
+    :return: The model
+    """
     # create class weight for imbalanced classes
     class_weight = create_class_weight(Counter(labels_train))
 
