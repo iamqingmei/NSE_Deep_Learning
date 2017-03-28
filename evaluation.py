@@ -1,167 +1,29 @@
 import datetime
 import numpy as np
-from feature_calc import DL_FEATURES, WIN_FEATURES
 from keras.utils.vis_utils import plot_model
 from keras.utils import np_utils
 from sklearn.metrics import confusion_matrix, classification_report, accuracy_score
 from collections import Counter
 import os
+import pandas as pd
+from Write_Class import Write
+import params
 
 
-def evaluation_report(model, label_type, features_test, labels_test, train_length, train_opt_dict, result_vs_gt=True,
-                      save_txt=True, save_model=True, remarks=None):
-    loss, acc = model.evaluate(features_test, labels_test, verbose=2)
-    write = str(datetime.datetime.now()) + '\n'
-    write += str(train_opt_dict) + '\n'
-    write += 'PT FEATURES included: ' + str(DL_FEATURES) + '\n'
-    write += 'WIN FEATURES included: ' + str(WIN_FEATURES) + '\n'
-    write += 'Training data size: ' + str(train_length) + '\n'
-    write += 'Testing data size: ' + str(len(labels_test)) + '\n'
-    write += 'loss: ' + str(loss) + ' acc' + str("%.2f" % round(acc, 4)) + '\n'
-    # write += model.summary().__str__()
-    result = model.predict(features_test)
-    result_label = np.argmax(result, 1)
-    gt_label = np.argmax(labels_test, 1)
-
-    z = zip(result_label, gt_label)
-
-    if result_vs_gt:
-        write += str(z)
-
-    con_matrix = confusion_matrix(gt_label, result_label)
-    write += str(con_matrix) + '\n'
-    write += "Classification report:\n"
-    write += str(classification_report(gt_label, result_label)) + '\n'
-
-    if remarks is not None:
-        write += '\n' + 'Remarks:' + str(remarks)
-    folder_name = './' + str(label_type) + '/evaluation_report/' + \
-                  str(datetime.datetime.now().strftime("%y-%m-%d %H-%M")) + '_' + str(train_opt_dict['label_number']) +\
-                  'l_acc' + str("%.2f" % round(acc, 2)) + '/'
-    #  create folder if not exists
-    if save_txt or save_model:
-        if not os.path.exists(folder_name):
-            os.makedirs(folder_name)
-
-    if save_txt:
-        file_name = str(train_opt_dict['label_number']) + 'labels_' + str("%.2f" % round(acc, 2)) + 'acc.txt'
-        f = open(folder_name + file_name, 'w')
-        f.truncate()
-        f.write(write)
-        f.close()
-
-    if save_model:
-        model_json = model.to_json()
-        with open(folder_name + "model.json", "w") as json_file:
-            json_file.write(model_json)
-        # serialize weights to HDF5
-        model.save_weights(folder_name + "model.h5")
-        print("Saved model to disk")
-        plot_model(model, to_file=folder_name + 'model.png', show_shapes=True)
-
-    return write
-
-
-def evaluation_four_result(folder_name, app_model, manual_model, app_features_test, app_labels_test,
-                           manual_features_test, manual_labels_test, app_win_df, manual_win_df):
-    # with tf.Graph().as_default():
-
-    write = ''
-    #  create folder if not exists
-    if not os.path.exists(folder_name):
-        os.makedirs(folder_name)
-
-    # save app_model
-    with open(folder_name + "app_model.json", "w") as json_file:
-        json_file.write(app_model.to_json())
-    app_model.save_weights(folder_name + "app_model.h5")
-    print("Saved app_model to disk")
-    plot_model(app_model, to_file=folder_name + 'app_model.png', show_shapes=True)
-
-    # save manual_model
-    with open(folder_name + "manual_model.json", "w") as json_file:
-        json_file.write(manual_model.to_json())
-        manual_model.save_weights(folder_name + "manual_model.h5")
-    print("Saved manual_model to disk")
-    plot_model(manual_model, to_file=folder_name + 'manual_model.png', show_shapes=True)
-
-    # evaluate app_model
-    loss, acc = app_model.evaluate(app_features_test, app_labels_test, verbose=2)
-    result = app_model.predict(app_features_test)
-    result_label = np.argmax(result, 1)
-    gt_label = np.argmax(app_labels_test, 1)
-    write += "\nuse app_test to test app_model: \n"
-    write += 'loss: ' + str(loss) + ' acc' + str("%.2f" % round(acc, 4)) + '\n'
-    write += str(confusion_matrix(gt_label, result_label)) + '\n'
-    target_names = ['stationary', 'walking', 'mrt', 'bus', 'car']
-    write += "Classification report:\n"
-    write += str((classification_report(gt_label, result_label, target_names=target_names))) + '\n'
-
-    # evaluate manual_model
-    loss, acc = manual_model.evaluate(manual_features_test, manual_labels_test, verbose=2)
-    result = manual_model.predict(manual_features_test)
-    result_label = np.argmax(result, 1)
-    gt_label = np.argmax(manual_labels_test, 1)
-    write += "\nuse manual_test to test manual_model \n"
-    write += 'loss: ' + str(loss) + ' acc' + str("%.2f" % round(acc, 4)) + '\n'
-    write += str(confusion_matrix(gt_label, result_label)) + '\n'
-    target_names = ['stationary/walking', 'mrt', 'bus', 'car']
-    write += "Classification report:\n"
-    write += str((classification_report(gt_label, result_label, target_names=target_names))) + '\n'
-
-    # evaluate app_model using manual data
-    manual_features = manual_win_df.iloc[:, 0:-1]
-    manual_labels = manual_win_df['win_label']
-
-    manual_labels[manual_labels == 3.0] = 4  # car
-    manual_labels[manual_labels == 2.0] = 3  # bus
-    manual_labels[manual_labels == 1.0] = 2  # mrt
-    manual_labels = np_utils.to_categorical(manual_labels)
-
-    loss, acc = app_model.evaluate(np.array(manual_features), np.array(manual_labels), verbose=2)
-    result = app_model.predict(np.array(manual_features))
-    result_label = np.argmax(result, 1)
-    for i in range(len(result_label)):
-        if result_label[i] == 1:
-            result_label[i] = 0
-    gt_label = np.argmax(np.array(manual_labels), 1)
-    count = 0
-    for i in range(len(result_label)):
-        if result_label[i] == gt_label[i]:
-            count += 1
-    acc = float(count)/len(result_label)
-    write += "\nuse manual data test app_model: \n"
-    write += 'loss: ' + str(loss) + ' acc' + str("%.2f" % round(acc, 4)) + '\n'
-    write += str(confusion_matrix(gt_label, result_label)) + '\n'
-    target_names = ['stationary/walking', 'mrt', 'bus', 'car']
-    write += "Classification report:\n"
-    write += str((classification_report(gt_label, result_label, target_names=target_names))) + '\n'
-
-    # evaluate manual_model using app data
-    app_features = app_win_df.iloc[:, 0:-1]
-    app_labels = app_win_df['win_label']
-
-    app_labels[app_labels == 1.0] = 0  # walk or stationary
-    app_labels[app_labels == 2.0] = 1  # mrt
-    app_labels[app_labels == 3.0] = 2  # bus
-    app_labels[app_labels == 4.0] = 3  # car
-    app_labels = np_utils.to_categorical(app_labels)
-
-    loss, acc = manual_model.evaluate(np.array(app_features), np.array(app_labels), verbose=2)
-    result = manual_model.predict(np.array(app_features))
-    result_label = np.argmax(result, 1)
-    gt_label = np.argmax(np.array(app_labels), 1)
-    write += "\nuse app data test manual_model: \n"
-    write += 'loss: ' + str(loss) + ' acc' + str("%.2f" % round(acc, 4)) + '\n'
-    write += str(confusion_matrix(gt_label, result_label)) + '\n'
-    target_names = ['stationary/walking', 'mrt', 'bus', 'car']
-    write += "Classification report:\n"
-    write += str((classification_report(gt_label, result_label, target_names=target_names))) + '\n'
-
-    return write
+evaluation_report = Write("")
 
 
 def evaluate_single_model(model, folder_name, model_name, features_test, labels_test, save_model=True):
+    """
+
+    :param model:
+    :param folder_name:
+    :param model_name:
+    :param features_test:
+    :param labels_test:
+    :param save_model:
+    :return:
+    """
     cat_labels_test = np_utils.to_categorical(labels_test)
     loss, acc = model.evaluate(features_test, cat_labels_test, verbose=2)
     write = "**********Evaluating " + str(model_name) + "************\n"
@@ -189,13 +51,15 @@ def evaluate_single_model(model, folder_name, model_name, features_test, labels_
         # serialize weights to HDF5
         model.save_weights(folder_name + model_name + "_model.h5")
         print("Saved model to disk")
-        #plot_model(model, to_file=folder_name + model_name + "_model.png", show_shapes=True)
+        plot_model(model, to_file=folder_name + model_name + "_model.png", show_shapes=True)
 
-    return write, acc
+    evaluation_report.add_content(write)
+    evaluation_report.add_accuracy(acc)
+    return result_label
 
 
 def evaluate_overall_app(triplet_model, walk_stop_model, car_bus_model, features_test, labels_test, triplet_idx,
-                        walk_stop_idx, car_bus_idx):
+                         walk_stop_idx, car_bus_idx):
     write = "**********Evaluate Overall Result**********\n"
     write += "Using App labelled data, with 5 labels\n"
     triplet_result = triplet_model.predict(features_test[:, triplet_idx])
@@ -208,13 +72,13 @@ def evaluate_overall_app(triplet_model, walk_stop_model, car_bus_model, features
     walk_stop_result = np.argmax(walk_stop_result, 1)
     result_label = []
 
-    for t in list(enumerate(triplet_result)):
-        if t[1] == 0:  # stationary or stop
-            result_label.append(walk_stop_result[t[0]])
-        elif t[1] == 1:  # mrt
+    for idx, t in enumerate(triplet_result):
+        if t == 0:  # stationary or stop
+            result_label.append(walk_stop_result[idx])
+        elif t == 1:  # mrt
             result_label.append(2)
         else:  # t[1] == 2
-            if car_bus_result[t[0]] == 0:
+            if car_bus_result[idx] == 0:
                 result_label.append(3)
             else:
                 result_label.append(4)
@@ -225,10 +89,14 @@ def evaluate_overall_app(triplet_model, walk_stop_model, car_bus_model, features
     write += "Classification report:\n"
     write += str(classification_report(labels_test, result_label)) + '\n'
 
-    return write, acc
+    evaluation_report.add_content(write)
+    evaluation_report.add_accuracy(acc)
 
-def evaluate_overall_app_2(vehicle_or_not_model, walk_stop_model, vehicle_type_model, features_test, labels_test, vehicle_or_not_idx,
-                        walk_stop_idx, vehicle_type_idx):
+    return result_label
+
+
+def evaluate_overall_app_2(vehicle_or_not_model, walk_stop_model, vehicle_type_model, features_test, labels_test,
+                           vehicle_or_not_idx, walk_stop_idx, vehicle_type_idx):
     write = "**********Evaluate Overall Result**********\n"
     write += "Using App labelled data, with 5 labels\n"
     vehicle_or_not_result = vehicle_or_not_model.predict(features_test[:, vehicle_or_not_idx])
@@ -241,20 +109,20 @@ def evaluate_overall_app_2(vehicle_or_not_model, walk_stop_model, vehicle_type_m
     walk_stop_result = np.argmax(walk_stop_result, 1)
     result_label = []
 
-    for t in list(enumerate(vehicle_or_not_result)):
-        if t[1] == 0:  # stationary or stop
-            result_label.append(walk_stop_result[t[0]])
-        elif t[1] == 1:  # vehicle
-            if vehicle_type_result[t[0]] == 0:
+    for idx, t in enumerate(vehicle_or_not_result):
+        if t == 0:  # stationary or stop
+            result_label.append(walk_stop_result[idx])
+        elif t == 1:  # vehicle
+            if vehicle_type_result[idx] == 0:
                 result_label.append(3)
-            elif vehicle_type_result[t[0]] == 1:
+            elif vehicle_type_result[idx] == 1:
                 result_label.append(4)
-            elif vehicle_type_result[t[0]] == 2:
+            elif vehicle_type_result[idx] == 2:
                 result_label.append(2)
             else:
-                print("Error in overall evaluation: wrong label!"+vehicle_type_result[t[0]] )
+                print("Error in overall evaluation: wrong label!" + str(vehicle_type_result[idx]))
         else:
-            print("Error in overall evaluation: wrong label!"+t[1])
+            print("Error in overall evaluation: wrong label! At idx %d, %d" % (idx, t))
 
     con_matrix = confusion_matrix(labels_test, result_label)
     acc = accuracy_score(labels_test, result_label)
@@ -262,7 +130,10 @@ def evaluate_overall_app_2(vehicle_or_not_model, walk_stop_model, vehicle_type_m
     write += "Classification report:\n"
     write += str(classification_report(labels_test, result_label)) + '\n'
 
-    return write, acc
+    evaluation_report.add_content(write)
+    evaluation_report.add_accuracy(acc)
+
+    return result_label
 
 
 def evaluate_overall_manual(triplet_model, car_bus_model, features_test, labels_test, triplet_idx, car_bus_idx):
@@ -276,13 +147,13 @@ def evaluate_overall_manual(triplet_model, car_bus_model, features_test, labels_
 
     result_label = []
 
-    for t in list(enumerate(triplet_result)):
-        if t[1] == 0:  # stationary or stop
+    for idx, t in enumerate(triplet_result):
+        if t == 0:  # stationary or stop
             result_label.append(0)
-        elif t[1] == 1:  # mrt
+        elif t == 1:  # mrt
             result_label.append(2)
         else:  # t[1] == 2
-            if car_bus_result[t[0]] == 0:
+            if car_bus_result[idx] == 0:
                 result_label.append(3)
             else:
                 result_label.append(4)
@@ -293,9 +164,14 @@ def evaluate_overall_manual(triplet_model, car_bus_model, features_test, labels_
     write += "Classification report:\n"
     write += str(classification_report(labels_test, result_label)) + '\n'
 
-    return write, acc
+    evaluation_report.add_content(write)
+    evaluation_report.add_accuracy(acc)
 
-def evaluate_overall_manual_2(vehicle_or_not_model, vehicle_type_model, features_test, labels_test, vehicle_or_not_idx, vehicle_type_idx):
+    return result_label
+
+
+def evaluate_overall_manual_2(vehicle_or_not_model, vehicle_type_model, features_test, labels_test, vehicle_or_not_idx,
+                              vehicle_type_idx):
     write = "**********Evaluate Overall Result**********\n"
     write += "Using manual labelled data, with 4 labels\n"
     vehicle_or_not_result = vehicle_or_not_model.predict(features_test[:, vehicle_or_not_idx])
@@ -306,20 +182,20 @@ def evaluate_overall_manual_2(vehicle_or_not_model, vehicle_type_model, features
 
     result_label = []
 
-    for t in list(enumerate(vehicle_or_not_result)):
-        if t[1] == 0:  # stationary or stop
-            result_label.append(0)
-        elif t[1] == 1:  # vehicle
-            if vehicle_type_result[t[0]] == 0:
-                result_label.append(3)
-            elif vehicle_type_result[t[0]] == 1:
-                result_label.append(4)
-            elif vehicle_type_result[t[0]] == 2:
-                result_label.append(2)
+    for idx, t in enumerate(vehicle_or_not_result):
+        if t == 0:  # stationary or stop
+            result_label.append(5)
+        elif t == 1:  # vehicle
+            if vehicle_type_result[idx] == 0:
+                result_label.append(2)  # mrt
+            elif vehicle_type_result[idx] == 1:
+                result_label.append(3)  # bus
+            elif vehicle_type_result[idx] == 2:
+                result_label.append(4)  # car
             else:
-                print("Error in overall evaluation: wrong label!"+vehicle_type_model[t[0]])
+                print("Error in overall evaluation: wrong label!"+vehicle_type_model[idx])
         else:  # t[1] == 2
-            print("Error in overall evaluation: wrong label!"+t[1])
+            print("Error in overall evaluation: wrong label! at idx %d, %d" % (idx, t))
 
     con_matrix = confusion_matrix(labels_test, result_label)
     acc = accuracy_score(labels_test, result_label)
@@ -327,6 +203,49 @@ def evaluate_overall_manual_2(vehicle_or_not_model, vehicle_type_model, features
     write += "Classification report:\n"
     write += str(classification_report(labels_test, result_label)) + '\n'
 
-    return write, acc
+    evaluation_report.add_content(write)
+    evaluation_report.add_accuracy(acc)
+
+    return result_label
 
 
+def save_predicted_result_in_csv(result_labels, df, folder_name, all_features, model_name, label_type):
+    # Save the predicted result into a csv
+
+    # each win label is assigned to the last pt in the win
+    lat_idx = all_features.index('WLATITUDE') + len(all_features) * (params.window_size - 1)
+    lon_idx = all_features.index('WLONGITUDE') + len(all_features) * (params.window_size - 1)
+    lat_lon = df.iloc[:, [lat_idx, lon_idx]]
+    lat_lon.columns = ['WLATITUDE', 'WLONGITUDE']
+
+    min_lon_sg = 103.565276
+    max_lon_sg = 104
+    min_lat_sg = 1.235578
+    max_lat_sg = 1.479055
+    lat_lon = lat_lon.assign(WLATITUDE=list(map(lambda x: (x * (max_lat_sg - min_lat_sg) + min_lat_sg)*(x != 0),
+                                                list(lat_lon['WLATITUDE']))))
+    lat_lon = lat_lon.assign(WLONGITUDE=list(map(lambda x: (x * (max_lon_sg - min_lon_sg) + min_lon_sg)*(x != 0),
+                                                 list(lat_lon['WLONGITUDE']))))
+    lat_lon = lat_lon.replace({0: -1}, regex=True)
+
+    df_to_save = pd.DataFrame(np.array(lat_lon), columns=['WLATITUDE', 'WLONGITUDE'])
+    df_to_save['pt_label'] = pd.Series(result_labels)
+    df_to_save['gt_label'] = pd.Series(np.array(df[label_type]))
+    df_to_save['trip_id'] = pd.Series(np.array(df['trip_id']))
+
+    df_to_save.to_csv(folder_name + model_name + '_test_result_pt.csv')
+
+
+def init_write(opt, train_opt, features, manual_win_df, app_win_df):
+    write = "Evaluation Report of Train_Hierarchical \n"
+    write += str(datetime.datetime.now().strftime("%y-%m-%d %H:%M")) + '\n'
+    write += "General option: \n" + str(opt) + "\n"
+    write += "Train option: \n" + str(train_opt) + "\n"
+    write += "Features: \n" + str(features) + "\n"
+    write += "Manual_win_df: " + str(Counter(manual_win_df[opt['label_type']])) + '\n'
+    write += "App_win_df: " + str(Counter(app_win_df[opt['label_type']])) + '\n'
+    evaluation_report.add_content(write)
+
+
+def save_write(folder_name):
+    evaluation_report.save_write(folder_name)

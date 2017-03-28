@@ -18,7 +18,7 @@ def insertTrainingInfo2016(conn, cur, tablename, data):
         cur.execute(insertQuery, data)
         conn.commit()
         return True
-    except(psycopg2.DatabaseError, e):
+    except psycopg2.DatabaseError as e:
         logging.error(e)
         return False
 
@@ -34,7 +34,7 @@ def getMainDataPSQL2015(cur, tablename, nid, analysis_date, current_date):
         cur.execute(allQuery)
         dataAll = cur.fetchall()
         if len(dataAll) > 0:
-            rawColumns = zip(*dataAll)
+            rawColumns = list(zip(*dataAll))
             raw_ts = rawColumns[2]
             unix_ts = []
             str_ts = []
@@ -50,7 +50,7 @@ def getMainDataPSQL2015(cur, tablename, nid, analysis_date, current_date):
         else:
             logging.warning('No data from the DB!')
             return None
-    except(psycopg2.DatabaseError, e):
+    except psycopg2.DatabaseError as e:
         logging.error(e)
         return None
 
@@ -84,7 +84,7 @@ def getLabelledVehicleData(cur, mode, tablename, label_type='manual', max_num=No
         cur.execute(allQuery)
         dataAll = cur.fetchall()
         if len(dataAll) > 0:
-            rawColumns = zip(*dataAll)
+            rawColumns = list(zip(*dataAll))
             df = pd.DataFrame.from_items(
                 [('ID', rawColumns[0]), ('NID', rawColumns[1]), ('analyzed_date', rawColumns[2]),
                  ('tot_num_trips', rawColumns[3]), ('trip_num', rawColumns[4]), ('home_loc', rawColumns[5]), \
@@ -94,7 +94,7 @@ def getLabelledVehicleData(cur, mode, tablename, label_type='manual', max_num=No
         else:
             logging.warning('No data from the DB!')
             return None
-    except(psycopg2.DatabaseError, e):
+    except psycopg2.DatabaseError as e:
         logging.error(e)
         return None
 
@@ -118,7 +118,8 @@ def getLabelledDataAll(cur, tablename, label_type, max_num=None):
         cur.execute(allQuery)
         dataAll = cur.fetchall()
         if len(dataAll) > 0:
-            rawColumns = zip(*dataAll)
+            rawColumns = list(zip(*dataAll))
+            rawColumns = list(rawColumns)
             df = pd.DataFrame.from_items(
                 [('ID', rawColumns[0]), ('NID', rawColumns[1]), ('analyzed_date', rawColumns[2]),
                  ('tot_num_trips', rawColumns[3]), ('trip_num', rawColumns[4]), ('home_loc', rawColumns[5]), \
@@ -128,7 +129,7 @@ def getLabelledDataAll(cur, tablename, label_type, max_num=None):
         else:
             logging.warning('No data from the DB!')
             return None
-    except(psycopg2.DatabaseError, e):
+    except psycopg2.DatabaseError as e:
         logging.error(e)
         return None
 
@@ -143,7 +144,7 @@ def getLabelledDataAll(cur, tablename, label_type, max_num=None):
 #         cur.execute(allQuery,(ids.tolist(),))
 #         dataAll = cur.fetchall()
 #         if len(dataAll)>0:
-#             rawColumns = zip(*dataAll)
+#             rawColumns = list(zip(*dataAll))
 #             raw_ts = rawColumns[2]
 #             unix_ts = []
 #             str_ts = []
@@ -160,7 +161,7 @@ def getLabelledDataAll(cur, tablename, label_type, max_num=None):
 #         else:
 #             logging.warning('No data from the DB!')
 #             return None
-#     except(psycopg2.DatabaseError, e):
+#     except psycopg2.DatabaseError as e:
 #         logging.error(e)
 #         return None
 
@@ -173,13 +174,13 @@ def getDeviceID(cur, tablename, analysis_date, current_date):
         cur.execute(allQuery)
         dataAll = cur.fetchall()
         if len(dataAll) > 0:
-            rawColumns = zip(*dataAll)
+            rawColumns = list(zip(*dataAll))
             logging.info('Succefully get device IDs from the DB!')
             return list(rawColumns[0])
         else:
             logging.warning('No device IDs from the DB!')
             return None
-    except(psycopg2.DatabaseError, e):
+    except psycopg2.DatabaseError as e:
         logging.error(e)
         return None
 
@@ -195,7 +196,7 @@ def getMainDataPSQL2016(cur, tablename, nid, analysis_date, current_date):
         cur.execute(allQuery)
         dataAll = cur.fetchall()
         if len(dataAll) > 0:
-            rawColumns = zip(*dataAll)
+            rawColumns = list(zip(*dataAll))
             raw_ts = rawColumns[2]
             unix_ts = []
             str_ts = []
@@ -217,7 +218,7 @@ def getMainDataPSQL2016(cur, tablename, nid, analysis_date, current_date):
         else:
             logging.warning('No data from the DB!')
             return None
-    except(psycopg2.DatabaseError, e):
+    except psycopg2.DatabaseError as e:
         logging.error(e)
         return None
 
@@ -234,7 +235,7 @@ def getTripDataPSQL2016(cur, tablename, nid, analysis_date, current_date, df):
         cur.execute(allQuery)
         dataAll = cur.fetchall()
         if len(dataAll) > 0:
-            rawColumns = zip(*dataAll)
+            rawColumns = list(zip(*dataAll))
             df2 = pd.DataFrame.from_items(
                 [('ID_extra', rawColumns[0]), ('lat_clean', rawColumns[3]), ('lon_clean', rawColumns[4]),
                  ('triplabel', rawColumns[5]), \
@@ -249,7 +250,7 @@ def getTripDataPSQL2016(cur, tablename, nid, analysis_date, current_date, df):
         else:
             logging.warning('No data from the DB!')
             return None
-    except(psycopg2.DatabaseError, e):
+    except psycopg2.DatabaseError as e:
         logging.error(e)
         return None
 
@@ -301,7 +302,7 @@ def splitZip2Save(cur, tablename, zip2save):
             zip2insert = zip2save
 
         return zip2update, zip2insert
-    except(psycopg2.DatabaseError, e):
+    except psycopg2.DatabaseError as e:
         logging.error("Failed to get existing data from DB!")
         logging.error(e)
         return None, None
@@ -348,7 +349,7 @@ def save_extra_PSQL_2016(conn, cur, tablename, data_frame):
             cur.executemany(setQuery, zip2update)
             conn.commit()
             update_success = True
-        except(psycopg2.DatabaseError, e):
+        except psycopg2.DatabaseError as e:
             logging.error(e)
             update_success = False
             logging.error("Updating failed!")
@@ -361,7 +362,7 @@ def save_extra_PSQL_2016(conn, cur, tablename, data_frame):
             cur.executemany(insertQuery, zip2insert)
             conn.commit()
             insert_success = True
-        except(psycopg2.DatabaseError, e):
+        except psycopg2.DatabaseError as e:
             logging.error(e)
             insert_success = False
             logging.error("Inserting failed!")
@@ -411,7 +412,7 @@ def checkNidDateExistence(cur, tablename, nid, analyzed_date):
         else:
             logging.warning("The trip info doesn't exist.")
         return existence, manually_labeled, app_labeled, google_labeled_failed, google_labeled_trusted
-    except(psycopg2.DatabaseError, e):
+    except psycopg2.DatabaseError as e:
         logging.error(e)
         return None, None, None, None, None
 
@@ -479,7 +480,7 @@ def save_tripsummary_PSQL_2016(conn, cur, tablename_trip, tablename_extra, trips
             cur.execute(allQuery)
             dataAll = cur.fetchall()
             if len(dataAll) > 0:
-                rawColumns = zip(*dataAll)
+                rawColumns = list(zip(*dataAll))
                 triplabels = np.array(rawColumns[0])
                 gt_mode_manual_list = np.array(rawColumns[1])
                 # go through each trip to get the trip-level modes
@@ -512,7 +513,7 @@ def save_tripsummary_PSQL_2016(conn, cur, tablename_trip, tablename_extra, trips
             cur.execute(allQuery)
             dataAll = cur.fetchall()
             if len(dataAll) > 0:
-                rawColumns = zip(*dataAll)
+                rawColumns = list(zip(*dataAll))
                 triplabels = np.array(rawColumns[0])
                 gt_mode_google_list = np.array(rawColumns[1])
                 # go through each trip to get the trip-level modes
@@ -592,7 +593,7 @@ def save_tripsummary_PSQL_2016(conn, cur, tablename_trip, tablename_extra, trips
             conn.commit()
             return True
 
-    except(psycopg2.DatabaseError, e):
+    except psycopg2.DatabaseError as e:
         logging.error(e)
         return False
 
@@ -615,7 +616,7 @@ def checkNidSgtPeriodExistence(cur, tablename, nid, sgt_start, sgt_end):
         else:
             logging.warning("No same data exists.")
             return False
-    except(psycopg2.DatabaseError, e):
+    except psycopg2.DatabaseError as e:
         logging.error(e)
         return None
 
@@ -651,7 +652,7 @@ def save_data_from_IHPC_to_PSQL(conn, cur, tablename, data_frame, nid):
                 0] + """' and sgt<='""" + sgt_list[-1] + """'"""
             cur.execute(deleteQuery)
             conn.commit()
-        except(psycopg2.DatabaseError, e):
+        except psycopg2.DatabaseError as e:
             logging.error(e)
             return False
 
@@ -671,7 +672,7 @@ def save_data_from_IHPC_to_PSQL(conn, cur, tablename, data_frame, nid):
         cur.executemany(insertQuery, zip2save)
         conn.commit()
         return True
-    except(psycopg2.DatabaseError, e):
+    except psycopg2.DatabaseError as e:
         logging.error(e)
         return False
 
@@ -696,7 +697,7 @@ def save_dailysummary_PSQL_2016(conn, cur, tablename, daily_summary):
             nid) + """ and analyzed_date='""" + analyzed_date + """'"""
         cur.execute(readQuery)
         rawData = cur.fetchall()
-    except(psycopg2.DatabaseError, e):
+    except psycopg2.DatabaseError as e:
         logging.error("Existence checking failed.")
         logging.error(e)
         return False
@@ -709,7 +710,7 @@ def save_dailysummary_PSQL_2016(conn, cur, tablename, daily_summary):
                 nid) + """ and analyzed_date='""" + analyzed_date + """'"""
             cur.execute(deleteQuery)
             conn.commit()
-        except(psycopg2.DatabaseError, e):
+        except psycopg2.DatabaseError as e:
             logging.error("Deleting existing summary checking failed.")
             logging.error(e)
             return False
@@ -734,7 +735,7 @@ def save_dailysummary_PSQL_2016(conn, cur, tablename, daily_summary):
                     vals)
         conn.commit()
         return True
-    except(psycopg2.DatabaseError, e):
+    except psycopg2.DatabaseError as e:
         logging.error("Inserting failed!")
         logging.error(e)
         return False
@@ -761,7 +762,7 @@ def getLabelledDataWithNullAppLabel(cur, tablename, label_type, max_num=None):
         cur.execute(allQuery)
         dataAll = cur.fetchall()
         if len(dataAll) > 0:
-            rawColumns = zip(*dataAll)
+            rawColumns = list(zip(*dataAll))
             # df = pd.DataFrame.from_items(
             #     [('ID', rawColumns[0]), ('NID', rawColumns[1]), ('analyzed_date', rawColumns[2]), \
                  # ('tot_num_trips', rawColumns[3]), ('trip_num', rawColumns[4]), ('home_loc', rawColumns[5]), \
@@ -774,7 +775,7 @@ def getLabelledDataWithNullAppLabel(cur, tablename, label_type, max_num=None):
         else:
             logging.warning('No data from the DB!')
             return None
-    except(psycopg2.DatabaseError, e):
+    except psycopg2.DatabaseError as e:
         logging.error(e)
         return None
 
@@ -790,7 +791,7 @@ def get_nids_with_app_label(cur, table_name):
         else:
             logging.warning('No data from the DB!')
             return None
-    except(psycopg2.DatabaseError, e):
+    except psycopg2.DatabaseError as e:
         logging.error(e)
         return None
 
@@ -825,6 +826,6 @@ def get_all_app_pt(cur):
         else:
             logging.warning('No data from the DB!')
             return None
-    except(psycopg2.DatabaseError, e):
+    except psycopg2.DatabaseError as e:
         logging.error(e)
         return None

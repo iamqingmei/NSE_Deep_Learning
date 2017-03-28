@@ -14,20 +14,22 @@ if get_all_feature_df_from_csv:
     app_features_pt = pd.DataFrame.from_csv('./pt_df/unnormalized_pt_features_df.csv')
     app_labels_pt = pd.DataFrame.from_csv('./pt_df/unnormalized_pt_labels_df.csv')
     all_features_df = pd.concat([manual_features_pt, app_features_pt])
-    bus_manual_features_df = manual_features_pt[manual_labels_pt.pt_label == 2]
-    bus_app_features_df = app_features_pt[app_labels_pt.pt_label == 3]
+    bus_manual_features_df = manual_features_pt[manual_labels_pt.pt_label == 3]
+    bus_app_features_df = app_features_pt[app_labels_pt.pt_label == 4]
     bus_features_df = pd.concat([bus_manual_features_df, bus_app_features_df])
 
-cur_feature = bus_features_df['TEMPERATURE']
+cur_feature = bus_features_df['STOP_10MIN'] + bus_features_df['FAST_10MIN']
 counts, bin_edges = np.histogram(cur_feature, bins=100, range=(min(cur_feature.tolist()), max(cur_feature.tolist())))
 # Plot
+counts = counts/len(bus_features_df)
+
 plt.plot(bin_edges[1:], counts)
 
 for i in range(len(ALL_FEATURES)):
     cur_feature = all_features_df[ALL_FEATURES[i]]
-    print "current feature is " + str(ALL_FEATURES[i])
-    print "current feature max: " + str(max(cur_feature.tolist()))
-    print "current feature min: " + str(min(cur_feature.tolist()))
+    print ("current feature is " + str(ALL_FEATURES[i]))
+    print ("current feature max: " + str(max(cur_feature.tolist())))
+    print ("current feature min: " + str(min(cur_feature.tolist())))
     # Plotting the graph
     # Use the histogram function to bin the data
     counts, bin_edges = np.histogram(cur_feature, bins=num_bins, range=(min(cur_feature.tolist()), max(cur_feature.tolist())))

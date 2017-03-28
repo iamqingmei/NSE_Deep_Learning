@@ -6,43 +6,8 @@ import params
 import pandas as pd
 from dbConnPSQL import getLabelledDataWithNullAppLabel, getMainDataPSQL2016, getTripDataPSQL2016, \
     get_nids_with_app_label
-from feature_calc import calc_extra_features, calc_geo_time_features, clean_geo_data, DL_FEATURES, cal_busmrt_dist, \
-    WIN_FEATURES, cal_win_features_special_trip_dict, cal_win_label_special_trip_dict
-from normalization import normalize, win_normalize
+from feature_calc import calc_extra_features, calc_geo_time_features, clean_geo_data, DL_FEATURES, cal_busmrt_dist
 import pickle
-
-
-def get_manual_win_df(window_size):
-    manual_features_pt = pd.DataFrame.from_csv('./manual/pt_df/unnormalized_pt_features_df.csv')
-    manual_labels_pt = pd.DataFrame.from_csv('./manual/pt_df/unnormalized_pt_labels_df.csv')['pt_label'].tolist()
-    with open("./manual/pt_df/trip_dict.txt", "rb") as fp:  # Unpickling
-        trip_dict = pickle.load(fp)
-
-    # normalized the point features
-    manual_features_pt = normalize(manual_features_pt[DL_FEATURES])
-    # features_pt is a Data frame
-
-    print("only collect the manual labelled data with user_id = 1")
-
-    labels_win = cal_win_label_special_trip_dict(manual_labels_pt, window_size, trip_dict, user_id=1)
-    features_win = cal_win_features_special_trip_dict(manual_features_pt, window_size, trip_dict, user_id=1)
-
-    # normalize the features for window level
-    if len(WIN_FEATURES) > 0:
-        features_win = win_normalize(features_win)
-
-    # check whether the features match with labels
-    if len(features_win) != len(labels_win):
-        logging.warning("the windows features are not matched with labels!!!!!!!!!!!!!!!!!!!!!!")
-
-    manual_win_df = pd.DataFrame(features_win)
-    manual_win_df['win_label'] = pd.Series(labels_win)
-
-    # remove the window with label mix
-    manual_win_df = manual_win_df[manual_win_df.win_label != 5]
-    manual_win_df = manual_win_df[manual_win_df.win_label != -1]
-    # now the win_df is unbalanced and has 4 labels
-    return manual_win_df
 
 
 def save_manual_pt_df(window_size):
@@ -196,9 +161,7 @@ def save_manual_pt_df(window_size):
             trip_dict[trip_count] = [len(features_pt), cur_user_id]
             trip_count += 1
 
-    pd.DataFrame(features_pt, columns=DL_FEATURES).to_csv(
-        './' + str(label_type) + '/pt_df/unnormalized_pt_features_df.csv')
-    pd.DataFrame(labels_pt, columns=['pt_label']).to_csv(
-        './' + str(label_type) + '/pt_df/unnormalized_pt_labels_df.csv')
-    with open("./" + str(label_type) + "/pt_df/trip_dict.txt", "wb") as fp:
+    pd.DataFrame(features_pt, columns=DL_FEATURES).to_csv('/data/manual/unnormalized_pt_features_df.csv')
+    pd.DataFrame(labels_pt, columns=['pt_label']).to_csv('/data/manual/unnormalized_pt_labels_df.csv')
+    with open("./data/manual/trip_dict.txt", "wb") as fp:
         pickle.dump(trip_dict, fp)

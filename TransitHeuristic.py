@@ -90,7 +90,7 @@ def build_station_rtree(station_to_location):
     """
     # create Rtree index
     rtree = index.Index()
-    for station_idx, (stationID, station_location) in enumerate(station_to_location.iteritems()):
+    for station_idx, (stationID, station_location) in enumerate(iter(station_to_location.items())):
         # station_idx: numeric bus stop index starting from zero, only used internally
         # stationID: station string ID
         # station_location: (lat, lon) location of station
@@ -102,7 +102,7 @@ def build_station_rtree(station_to_location):
     return rtree
 
 
-def find_nearest_station(lat, lon, rtree, threshold):
+def find_nearest_station(lat, lon, rtree):
     """Find nearest station(s) given a lat/lon position.  Input is a
     lat/lon location and the Rtree spatial index of stations. Return a
     list of tuples. Each tuple contains (station id, distance to the
@@ -115,13 +115,20 @@ def find_nearest_station(lat, lon, rtree, threshold):
     # NOTE: bounds coordinates are 'interleaved' by default
     # insert as [x, y, x, y] and returned as [xmin, xmax, ymin, ymax]
     # See http://toblerity.org/rtree/tutorial.html
-    return [ (rtree_entry.object,
-              great_circle_dist((lat,lon),(rtree_entry.bounds[0],
-                                           rtree_entry.bounds[2]), unit="meters")) for rtree_entry
-             in rtree.nearest((lat,lon,lat,lon), num_results=1,
-                              objects=True) if
-             great_circle_dist((lat,lon),(rtree_entry.bounds[0],
-                                          rtree_entry.bounds[2]), unit="meters") < threshold ]
+
+    # return [ (rtree_entry.object,
+    #           great_circle_dist((lat,lon),(rtree_entry.bounds[0],
+    #                                        rtree_entry.bounds[2]), unit="meters")) for rtree_entry
+    #          in rtree.nearest((lat,lon,lat,lon), num_results=1,
+    #                           objects=True) if
+    #          great_circle_dist((lat,lon),(rtree_entry.bounds[0],
+    #                                       rtree_entry.bounds[2]), unit="meters") < threshold ]
+
+    return [(rtree_entry.object,
+             great_circle_dist((lat, lon), (rtree_entry.bounds[0],
+                                            rtree_entry.bounds[2]), unit="meters")) for rtree_entry
+            in rtree.nearest((lat, lon, lat, lon), num_results=1,
+                             objects=True)]
     # rtree_entry.bounds[0] = station_location[0] = rtree_entry.bbox[0]
     # rtree_entry.bounds[2] = station_location[1] = rtree_entry.bbox[1]
 

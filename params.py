@@ -11,3 +11,7 @@ dbname_str = "nse_local"
 dbuser_str = "postgres"
 dbhost = "localhost"
 dbport = "5432"
+
+defalt_mixed_invalid_label = -1
+
+window_size = 6

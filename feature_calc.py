@@ -10,63 +10,29 @@ import random
 from collections import Counter
 
 
-# ['ID', 'NID', 'SGT', 'TIMESTAMP', 'HUMIDITY', 'LIGHT', 'MODE', 'CMODE', 'NOISE', 'PRESSURE', 'STEPS', 'TEMPERATURE',
-#  'IRTEMPERATURE', 'MEANMAG', 'MEANGYR', 'STDGYR', 'STDACC', 'MAXACC', 'MAXGYR', 'MAC', 'WLATITUDE', 'WLONGITUDE',
-#  'ACCURACY', 'ID_extra', 'lat_clean', 'lon_clean', 'triplabel', 'poilabel', 'ccmode', 'gt_mode_manual',
-#  'gt_mode_google', 'gt_mode_app', 'ANALYZED_DATE', 'TIME_SGT', 'TIME_DELTA', 'STEPS_DELTA', 'DISTANCE_DELTA',
-#  'VELOCITY', 'ACCELERATION', 'MOV_AVE_VELOCITY', 'MOV_AVE_ACCELERATION', 'BUS_DIST', 'METRO_DIST', 'STDMEAN_MAG_WIN',
-#  'drMEAN_MAG_WIN', 'STDPRES_WIN', 'GT_MODE_APP', 'NUM_AP', 'is_localized']
-
-# todo try other features.
-
-# todo previous
-# todo
-# ['MOV_AVE_VELOCITY', 'STDACC', 'MEANMAG', 'MAXGYR', 'PRESSURE', 'STDPRES_WIN', 'NUM_AP', 'WLATITUDE',
-# 'WLONGITUDE', 'is_localized', 'METRO_DIST', 'BUS_DIST', 'STEPS', 'NOISE', 'TIME_DELTA', 'TEMPERATURE',
-# 'IRTEMPERATURE', 'HUMIDITY', 'STD_VELOCITY_10MIN', 'MAX_VELOCITY_10MIN', 'VELOCITY', 'TIMESTAMP',
-# 'STOP_10MIN', 'STOP_BUSSTOP_10MIN', 'FAST_10MIN']
-
-
-# ['MOV_AVE_VELOCITY', 'STDACC', 'MEANMAG', 'MAXGYR', 'PRESSURE', 'STDPRES_WIN', 'NUM_AP', 'METRO_DIST', 'BUS_DIST', 'NOISE']
-
-DL_FEATURES = ['MOV_AVE_VELOCITY', 'STDACC', 'MEANMAG', 'MAXGYR', 'PRESSURE', 'STDPRES_WIN', 'NUM_AP', 'METRO_DIST',
-               'BUS_DIST', 'NOISE', 'STD_VELOCITY_10MIN', 'TIME_DELTA', 'TEMPERATURE', 'STOP_BUSSTOP_10MIN']
+DL_FEATURES = ['MOV_AVE_VELOCITY', 'STDACC', 'MEANMAG', 'MAXGYR', 'PRESSURE', 'STDPRES_WIN', 'NUM_AP', 'WLATITUDE',
+               'WLONGITUDE', 'is_localized', 'METRO_DIST', 'BUS_DIST', 'STEPS', 'NOISE', 'TIME_DELTA', 'TEMPERATURE',
+               'IRTEMPERATURE', 'HUMIDITY', 'STD_VELOCITY_10MIN', 'VELOCITY', 'TIMESTAMP',
+               'STOP_10MIN', 'STOP_BUSSTOP_10MIN']
 
 WIN_FEATURES = []
-
-WALK_STAT_FEATURES = ['MOV_AVE_VELOCITY', 'STDACC', 'MEANMAG', 'PRESSURE', 'STDPRES_WIN', 'NUM_AP', 'NOISE',
-                      'TIME_DELTA', 'STD_VELOCITY_10MIN']
-
-TRIPLET_FEATURES = ['MOV_AVE_VELOCITY', 'STDACC', 'MEANMAG', 'MAXGYR', 'PRESSURE', 'STDPRES_WIN', 'METRO_DIST',
-                    'STD_VELOCITY_10MIN']
-
-BUS_CAR_FEATURES = ['MOV_AVE_VELOCITY', 'STDACC', 'MEANMAG', 'MAXGYR','PRESSURE', 'STDPRES_WIN', 'BUS_DIST',
-                    'METRO_DIST', 'NOISE', 'TEMPERATURE', 'STOP_BUSSTOP_10MIN']
-
-VEHICLE_OR_NOT_FEATURES = ['MOV_AVE_VELOCITY', 'STDACC', 'MEANMAG', 'MAXGYR', 'PRESSURE', 'STDPRES_WIN', 'METRO_DIST',
-                    'STD_VELOCITY_10MIN']
-
-VEHICLE_TYPE_FEATURES = ['MOV_AVE_VELOCITY', 'STDACC', 'MEANMAG', 'MAXGYR','PRESSURE', 'STDPRES_WIN', 'BUS_DIST',
-                    'METRO_DIST', 'NOISE', 'TEMPERATURE', 'STOP_BUSSTOP_10MIN']
 
 BUS_VELOCITY_THRESHOLD = 5.5
 NEAR_BUS_STOP_THRESHOLD = 10
 
-# TODO num_ap
-# TODO choose the test sample before balancing
-# TODO label_number
-
 
 def calc_geo_time_features(data_frame, queried_date_str, window_size, high_velocity_thresh=40):
-    """Calculate additional features and attributes from the raw hardware
+    """
+    Calculate additional features and attributes from the raw hardware
     data. New attributes are added as new columns in the data frame in
     place.
-
-    high_velocity_thresh : maximum threshold for velocities in m/s,
-                           higher values are rejected. Default 40m/s
-                           (= 144 km/h)
-
-    queried_date_str: date when the data is collected, in format "%Y%m%d"
+    Additional features included: ANALYZED_DATE, TIME_DELTA, STEPS, STEPS_DELTA, DISTANCE_DELTA, VELOCITY, ACCELERATION,
+    MOV_AVE_VELOCITY, MOV_AVE_ACCELERATION
+    :param data_frame: The original dataframe, including those raw features
+    :param queried_date_str: Analyzed data
+    :param window_size:
+    :param high_velocity_thresh:
+    :return: The status of success of feature calculation
     """
 
     # add analyzed date into the data frame
@@ -76,8 +42,9 @@ def calc_geo_time_features(data_frame, queried_date_str, window_size, high_veloc
     data_frame['TIME_SGT'] = pd.Series(time_SGT)
 
     # calculate time delta since the last measurement, in seconds
-    consec_timestamps = zip(data_frame[['TIMESTAMP']].values[:-1], data_frame[['TIMESTAMP']].values[1:])
-    delta_timestamps = map(lambda x: x[1][0] - x[0][0], consec_timestamps)
+    a = np.array(data_frame.iloc[:-1]['TIMESTAMP'])
+    b = np.array(data_frame.iloc[1:]['TIMESTAMP'])
+    delta_timestamps = list(b-a)
     if data_frame['TIME_SGT'][0] < 1.5:
         # add dt to 24 am for the first measurement when first point is within 24 am to 1.5am
         delta_timestamps = [int(data_frame['TIME_SGT'][0] * 3600)] + delta_timestamps
@@ -103,8 +70,8 @@ def calc_geo_time_features(data_frame, queried_date_str, window_size, high_veloc
     df_validloc = data_frame.loc[~np.isnan(data_frame['WLATITUDE']) & ~np.isnan(data_frame['WLONGITUDE'])]
     # calculate distance delta from pairs of valid lat/lon locations that follow each other
     valid_latlon = df_validloc[['WLATITUDE', 'WLONGITUDE']].values
-    dist_delta = map(lambda loc_pair: great_circle_dist(loc_pair[0], loc_pair[1], unit="meters"),
-                     zip(valid_latlon[:-1], valid_latlon[1:]))
+    dist_delta = list(map(lambda loc_pair: great_circle_dist(loc_pair[0], loc_pair[1], unit="meters"),
+                          zip(valid_latlon[:-1], valid_latlon[1:])))
     # calculate time delta from pairs of valid timestamps
     valid_times = df_validloc['TIMESTAMP'].values
     time_delta = valid_times[1:] - valid_times[:-1]
@@ -160,16 +127,19 @@ def pt_during_selected_time(df, cur_pt_idx, time):
     stop_count = 0
     stop_bus_stop_count = 0
     fast_count = 0
-    for i in range(cur_pt_idx-1, -1, -1):
+    for i in range(cur_pt_idx, -1, -1):
         if cur_time - df.iloc[i]['TIMESTAMP'] > time:
             result_idx = i+1
             break
         if df.iloc[i]['VELOCITY'] < BUS_VELOCITY_THRESHOLD:
             stop_count += 1
             if df.iloc[i]['BUS_DIST'] < NEAR_BUS_STOP_THRESHOLD:
-                stop_bus_stop_count += 1
+                if df.iloc[i]['BUS_DIST'] != -1:
+                    stop_bus_stop_count += 1
         else:
             fast_count += 1
+
+
     return df.iloc[result_idx:cur_pt_idx], stop_count, stop_bus_stop_count, fast_count
 
 
@@ -453,7 +423,7 @@ def vehicle_seg_feature_calc(df_vehi_seg, df_all_day, train_dist=150, bus_dist=1
         last_valid_lon = df_vehi_seg_validloc['WLONGITUDE'].iloc[-1]
         # Distance between first point to nearest bus
         closeBusStops_begin = TransitHeuristic.find_nearest_station(first_valid_lat, first_valid_lon, \
-                                                                    bus_heuristic.bus_location_tree, bus_dist)
+                                                                    bus_heuristic.bus_location_tree)
         if len(closeBusStops_begin) > 0:
             dist2all = [busstop[1] for busstop in closeBusStops_begin]
             featureDict['first_bus'] = min(dist2all)
@@ -816,113 +786,7 @@ def find_array_start_end(a, num_thresh):
     return np.array(ranges)
 
 
-def cal_win_label_special_trip_dict(labels, window_size, trip_dict, user_id=-1):
-    """
-    calculate the window labels for a list of labels
-    :param labels: list of labels
-    :param window_size: the window size
-    :return: list of window labels
-    """
-    if type(labels) is not np.ndarray:
-        labels = np.array(labels)
-    result = []
-    keys = sorted(trip_dict.keys())
-    for key_idx in range(len(keys) - 1):
-        if user_id != -1:
-            if trip_dict[keys[key_idx + 1]][1] != user_id:
-                continue
-        for idx in range(window_size - 1 + trip_dict[keys[key_idx]][0], trip_dict[keys[key_idx + 1]][0]):
-            result.append(get_win_label(labels[idx - window_size + 1:idx + 1]))
-    return result
-
-
-def cal_win_label(labels, window_size, trip_dict):
-    """
-    calculate the window labels for a list of labels
-    :param labels: list of labels
-    :param window_size: the window size
-    :return: list of window labels
-    """
-    if type(labels) is not np.ndarray:
-        labels = np.array(labels)
-    result = []
-    keys = sorted(trip_dict.keys())
-    for key_idx in range(len(keys) - 1):
-        for idx in range(window_size - 1 + trip_dict[keys[key_idx]], trip_dict[keys[key_idx + 1]]):
-            result.append(get_win_label(labels[idx - window_size + 1:idx + 1]))
-    return result
-
-
-def get_win_label(labels_in_win):
-    """
-    calculate the label for a whole window
-    :param labels_in_win: all the point labels in the window
-    :return: a label for the window
-    """
-    result = 5
-    labels_in_win = labels_in_win.tolist()
-    label_set = set(labels_in_win)
-    if len(label_set) == 1:
-        result = labels_in_win[0]
-    return result
-
-
-def cal_win_features_special_trip_dict(features, window_size, trip_dict, user_id=-1):
-    """
-    convert the point features to window features
-    :param features: list of point features
-    :param window_size: the window size
-    :param trip_dict:
-    :param user_id:
-    :return: list of window features
-    """
-
-    if type(features) is not np.ndarray:
-        features = np.array(features)
-    results = []
-    keys = sorted(trip_dict.keys())
-    for key_idx in range(len(keys) - 1):
-        if user_id != -1:
-            if trip_dict[keys[key_idx + 1]][1] != user_id:
-                continue
-
-        for idx in range(window_size - 1 + trip_dict[keys[key_idx]][0], trip_dict[keys[key_idx + 1]][0]):
-            results.append(get_win_feature(features[idx - window_size + 1:idx + 1]))
-    return results
-
-
-def cal_win_features(features, window_size, trip_dict):
-    """
-    convert the point features to window features
-    :param features: list of point features
-    :param window_size: the window size
-    :return: list of window features
-    """
-
-    if type(features) is not np.ndarray:
-        features = np.array(features)
-    results = []
-    keys = sorted(trip_dict.keys())
-    for key_idx in range(len(keys) - 1):
-        for idx in range(window_size - 1 + trip_dict[keys[key_idx]], trip_dict[keys[key_idx + 1]]):
-            results.append(get_win_feature(features[idx - window_size + 1:idx + 1]))
-    return results
-
-
-def get_win_feature(features_list):
-    """
-    append all point features into one list
-    :param features_list: a list of point features in a window
-    :return: the features of a window in a list
-    """
-    results = []
-    for features in features_list:
-        for feature in features:
-            results.append(feature)
-    return results
-
-
-def cal_busmrt_dist(df, train_dist=1500, bus_dist=1000, default_dist=-1):
+def cal_busmrt_dist(df, default_dist=-1):
     """
     cal_busmrt_dist function is to calculate The BUS_DIST and METRO_DIST.
     :param df: The DataFrame of data.
@@ -933,9 +797,6 @@ def cal_busmrt_dist(df, train_dist=1500, bus_dist=1000, default_dist=-1):
     """
     train_heuristic = TransitHeuristic.TrainPredictor()
     bus_heuristic = TransitHeuristic.BusMapPredictor()
-
-    bus_dist_list = []
-    metro_dist_list = []
 
     TIME_THRESHOLD = 10 * 60
     std_velocity_all = []
@@ -951,9 +812,9 @@ def cal_busmrt_dist(df, train_dist=1500, bus_dist=1000, default_dist=-1):
         closeMRT = []
         if ~np.isnan(df['WLATITUDE'].iloc[i]) and ~np.isnan(df['WLONGITUDE'].iloc[i]):
             closeBus = TransitHeuristic.find_nearest_station(df['WLATITUDE'].iloc[i], df['WLONGITUDE'].iloc[i], \
-                                                             bus_heuristic.bus_location_tree, bus_dist)
+                                                             bus_heuristic.bus_location_tree)
             closeMRT = TransitHeuristic.find_nearest_station(df['WLATITUDE'].iloc[i], df['WLONGITUDE'].iloc[i], \
-                                                             train_heuristic.train_location_tree, train_dist)
+                                                             train_heuristic.train_location_tree)
         if len(closeBus) > 0:
             dist2all = [Bus[1] for Bus in closeBus]
             df.set_value(i, 'BUS_DIST', min(dist2all))
@@ -962,32 +823,84 @@ def cal_busmrt_dist(df, train_dist=1500, bus_dist=1000, default_dist=-1):
             dist2all = [MRT[1] for MRT in closeMRT]
             df.set_value(i, 'METRO_DIST', min(dist2all))
 
-        recent_points, stop_count, stop_bus_stop_count, fast_count = pt_during_selected_time(df, i, TIME_THRESHOLD)
-        stops_10min_all.append(stop_count)
-        stops_near_bus_stop_10min_all.append(stop_bus_stop_count)
-        fast_10min_all.append(fast_count)
-        if (recent_points is None) or (len(recent_points) == 0):
-            # there is no recent points
-            std_velocity_all.append(0)
-            max_velocity_10min_all.append(0)
+    #     recent_points, stop_count, stop_bus_stop_count, fast_count = pt_during_selected_time(df, i, TIME_THRESHOLD)
+    #
+    #     stops_10min_all.append(stop_count)
+    #     stops_near_bus_stop_10min_all.append(stop_bus_stop_count)
+    #     fast_10min_all.append(fast_count)
+    #     if (recent_points is None) or (len(recent_points) == 0):
+    #         # there is no recent points
+    #         std_velocity_all.append(0)
+    #         max_velocity_10min_all.append(0)
+    #     else:
+    #         std = np.nanstd(recent_points['VELOCITY'])
+    #         if np.isnan(std):
+    #             std_velocity_all.append(0)
+    #         else:
+    #             std_velocity_all.append(std)
+    #
+    #         m = max(recent_points['VELOCITY'])
+    #         if np.isnan(m):
+    #             max_velocity_10min_all.append(0)
+    #         else:
+    #             max_velocity_10min_all.append(m)
+    #
+    # df['MAX_VELOCITY_10MIN'] = pd.Series(max_velocity_10min_all)
+    # df['STD_VELOCITY_10MIN'] = pd.Series(std_velocity_all)
+    # df['STOP_10MIN'] = pd.Series(stops_10min_all)
+    # df['STOP_BUSSTOP_10MIN'] = pd.Series(stops_near_bus_stop_10min_all)
+    # df['FAST_10MIN'] = pd.Series(fast_10min_all)
+
+    df['STOP_10MIN'] = pd.Series([0] * len(df))
+    df['STOP_BUSSTOP_10MIN'] = pd.Series([0] * len(df))
+    df['STD_VELOCITY_10MIN'] = pd.Series([0.0] * len(df))
+    vel_bus_dist_bool = []
+    vel_bool = []
+    cur_start_idx = 1
+    cur_count_stop = 0
+    cur_count_busstop_stop = 0
+    all_delta_time = 0
+
+    if df.iloc[0]['VELOCITY'] < BUS_VELOCITY_THRESHOLD:
+        vel_bool.append(1)
+        if df.iloc[0]['BUS_DIST'] < NEAR_BUS_STOP_THRESHOLD:
+            vel_bus_dist_bool.append(1)
         else:
-            std = np.nanstd(recent_points['VELOCITY'])
-            if np.isnan(std):
-                std_velocity_all.append(0)
-            else:
-                std_velocity_all.append(std)
+            vel_bus_dist_bool.append(0)
+    else:
+        vel_bool.append(0)
+        vel_bus_dist_bool.append(0)
 
-            m = max(recent_points['VELOCITY'])
-            if np.isnan(m):
-                max_velocity_10min_all.append(0)
-            else:
-                max_velocity_10min_all.append(m)
+    cur_count_stop += vel_bool[0]
+    cur_count_busstop_stop += vel_bus_dist_bool[0]
 
-    df['MAX_VELOCITY_10MIN'] = pd.Series(max_velocity_10min_all)
-    df['STD_VELOCITY_10MIN'] = pd.Series(std_velocity_all)
-    df['STOP_10MIN'] = pd.Series(stops_10min_all)
-    df['STOP_BUSSTOP_10MIN'] = pd.Series(stops_near_bus_stop_10min_all)
-    df['FAST_10MIN'] = pd.Series(fast_10min_all)
+    for i in range(1, len(df)):
+
+        if df.iloc[i]['VELOCITY'] < BUS_VELOCITY_THRESHOLD:
+            vel_bool.append(1)
+            if df.iloc[i]['BUS_DIST'] < NEAR_BUS_STOP_THRESHOLD:
+                vel_bus_dist_bool.append(1)
+            else:
+                vel_bus_dist_bool.append(0)
+        else:
+            vel_bool.append(0)
+            vel_bus_dist_bool.append(0)
+
+        cur_count_stop += vel_bool[i]
+        cur_count_busstop_stop += vel_bus_dist_bool[i]
+
+        all_delta_time += df.iloc[i]['TIME_DELTA']
+        while all_delta_time > TIME_THRESHOLD:
+            # if cur_start_idx > 1:
+            all_delta_time -= df.iloc[cur_start_idx]['TIME_DELTA']
+            cur_count_stop -= vel_bool[cur_start_idx-1]
+            cur_count_busstop_stop -= vel_bus_dist_bool[cur_start_idx-1]
+            cur_start_idx += 1
+
+        df.set_value(i, 'STD_VELOCITY_10MIN', np.nanstd(df.iloc[cur_start_idx-1:i+1]['VELOCITY'].tolist()))
+        df.set_value(i, 'STOP_10MIN', cur_count_stop)
+        df.set_value(i, 'STOP_BUSSTOP_10MIN', cur_count_busstop_stop)
+    print("HI!")
 
 
 def random_select_idx(labels_all_list, num_test, label_number):
