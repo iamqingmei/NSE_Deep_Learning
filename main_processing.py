@@ -61,8 +61,8 @@ def main():
 
     evaluation.init_write(opt, train_opt, features, manual_win_df, app_win_df)
     # ~~~~~~~~~~~~~~ train vehicle/Non-vehicle model ~~~~~~~~~~~~~~~~
-    vehicle_or_not_train_win_df = manual_train_win_df
-    vehicle_or_not_test_win_df = manual_test_win_df
+    vehicle_or_not_train_win_df = manual_train_win_df.copy()
+    vehicle_or_not_test_win_df = manual_test_win_df.copy()
     vehicle_or_not_index = preprocessing.get_feature_idx(features['VEHICLE_OR_NOT_FEATURES'], features['ALL_FEATURES'])
     preprocessing.reassign_label(vehicle_or_not_train_win_df, vehicle_or_not_test_win_df,
                                  [[1, 0], [2, 1], [3, 1], [4, 1], [5, 0]], opt['label_type'])
@@ -75,8 +75,8 @@ def main():
         np.array(vehicle_or_not_test_win_df.iloc[:, vehicle_or_not_index]),
         np.array(vehicle_or_not_test_win_df[opt['label_type']]))
     # ~~~~~~~~~~~~~~~~ train vehicle_type_model ~~~~~~~~~~~~~~~~
-    vehicle_type_train_win_df = manual_train_win_df
-    vehicle_type_test_win_df = manual_test_win_df
+    vehicle_type_train_win_df = manual_train_win_df.copy()
+    vehicle_type_test_win_df = manual_test_win_df.copy()
     vehicle_type_index = preprocessing.get_feature_idx(features['VEHICLE_TYPE'], features['ALL_FEATURES'])
 
     vehicle_type_test_win_df = vehicle_type_test_win_df[(vehicle_type_test_win_df[opt['label_type']] == 4)
