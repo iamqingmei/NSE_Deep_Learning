@@ -750,8 +750,11 @@ def getLabelledDataWithNullAppLabel(cur, tablename, label_type, max_num=None):
         if label_type == 'manual':
             search_condition = "app_label_finish='f' and manual_label_mode!='' and manual_label_finish = 't'"
         elif label_type == 'google':
-            search_condition = "google_label_finish='t' and google_label_mode is not null and google_failed_reason is " \
-                               "NULL and app_label_finish = 'f' "
+            search_condition = "app_label_finish='f' and " \
+                               "google_label_finish='t' and " \
+                               "google_label_mode is not null and " \
+                               "google_failed_reason is NULL and " \
+                               "manual_label_finish = 'f' "
         else:
             logging.warning("MUST ENTER the correct label_type!!!")
             return None
@@ -787,7 +790,7 @@ def get_nids_with_app_label(cur, table_name):
         cur.execute(all_query)
         data_all = cur.fetchall()
         if len(data_all) > 0:
-            return set(data_all)
+            return list(list(zip(*data_all))[0])
         else:
             logging.warning('No data from the DB!')
             return None

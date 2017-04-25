@@ -4,14 +4,14 @@ import datetime
 import psycopg2
 import params
 import pandas as pd
-from dbConnPSQL import getLabelledDataWithNullAppLabel, getMainDataPSQL2016, getTripDataPSQL2016, \
+from .dbConnPSQL import getLabelledDataWithNullAppLabel, getMainDataPSQL2016, getTripDataPSQL2016, \
     get_nids_with_app_label
-from feature_calc import calc_extra_features, calc_geo_time_features, clean_geo_data, DL_FEATURES, cal_busmrt_dist
+from .feature_calc import calc_extra_features, calc_geo_time_features, clean_geo_data, DL_FEATURES, cal_busmrt_dist
 import pickle
 import os
 
 
-def save_manual_pt_df(window_size):
+def save_google_pt_df(window_size):
     """
     Fetch data from database and calculate feature for all the data
     After all the calculation, save the dataframe into a csv for further uses
@@ -21,24 +21,27 @@ def save_manual_pt_df(window_size):
     # initialization
     trip_dict = {}
     trip_count = 0
-    trip_dict[-1] = [0, -1]
-    label_type = "manual"
+    trip_dict[-1] = 0
+    label_type = "google"
 
     #  create folder if not exists
-    if not os.path.exists('./data/manual/'):
-        os.makedirs('./data/manual/')
+    if not os.path.exists('data/google/'):
+        os.makedirs('data/google/')
 
-    # conCom = """dbname='nse_mode_id' user='postgres' password='"""+dbpw_str+"""' host='localhost'"""
-    conCom = """dbname='""" + params.dbname_str + """' user='""" + params.dbuser_str + """' password='""" + \
-             params.dbpw_str + """' host='""" + params.dbhost + """' port ='""" + params.dbport + """' """
-    connPSQL = psycopg2.connect(conCom)
-    cursorPSQL = connPSQL.cursor()
+    # con_com = """dbname='nse_mode_id' user='postgres' password='"""+dbpw_str+"""' host='localhost'"""
+    con_com = """dbname='""" + params.dbname_str + """' user='""" + params.dbuser_str + """' password='""" + \
+              params.dbpw_str + """' host='""" + params.dbhost + """' port ='""" + params.dbport + """' """
+    conn_psql = psycopg2.connect(con_com)
+    cursor_psql = conn_psql.cursor()
 
     # queary for all vehicle labelled data
-    trip_df_labelled = getLabelledDataWithNullAppLabel(cursorPSQL, "allweeks_tripsummary", label_type, max_num=None)
-    trip_df_labelled = trip_df_labelled[trip_df_labelled.user_id == 1]
-    nids_with_app_label = get_nids_with_app_label(cursorPSQL, "allweeks_extra")
+
     # Returns trip_df_labelled which consists of a data frame of all node ID's which have been labelled
+    trip_df_labelled = getLabelledDataWithNullAppLabel(cursor_psql, "allweeks_tripsummary", label_type, max_num=None)
+
+    # Avoid the nids which has app_label
+    nids_with_app_label = get_nids_with_app_label(cursor_psql, "allweeks_extra")
+
     # which are of type 'vehicle' vehicle = 4,5,6 MRT/Bus/Car
     # walk or stationary = 3
     # get all combination of nid, date, tripnum, which specify a particular trip of one node on one day
@@ -62,15 +65,26 @@ def save_manual_pt_df(window_size):
                 (nid_date_tripnum[:, 0] == cur_nid) & (nid_date_tripnum[:, 1] == cur_date), 2].tolist()
             unique_nid_date_with_tripnum.append([one_nid_date, cur_tripnum])
 
-    # print unique_nid_date_with_tripnum
+    with open("data/google/test.txt", "wb") as fp:  # Pickling
+        pickle.dump(unique_nid_date_with_tripnum, fp)
 
     # initialization
     features_pt = []
     labels_pt = []
+    pt_count = 0
+    saved_file_count = 0
     # process each [nid, date] pair, obtain data, calculate features, and process each trip
     num_iteration = len(unique_nid_date_with_tripnum)
 
     for item in unique_nid_date_with_tripnum[0:num_iteration]:
+        if len(labels_pt) > 10000:
+            pd.DataFrame(features_pt, columns=DL_FEATURES).to_csv('data/google/unnormalized_pt_features_df_' +
+                                                                  str(saved_file_count) + '.csv')
+            pd.DataFrame(labels_pt, columns=['pt_label']).to_csv('data/google/unnormalized_pt_labels_df_' +
+                                                                 str(saved_file_count) + '.csv')
+            saved_file_count += 1
+            features_pt = []
+            labels_pt = []
         cur_nid = item[0][0]
         cur_date = item[0][1]
         all_tripnum = item[1]
@@ -81,8 +95,8 @@ def save_manual_pt_df(window_size):
         ana_date_tuple = datetime.datetime.strptime(str(cur_date), '%Y%m%d')
         ana_date_str = ana_date_tuple.strftime('%Y-%m-%d')
         second_date_str = (ana_date_tuple + datetime.timedelta(days=1)).strftime('%Y-%m-%d')
-        data_frame_raw = getMainDataPSQL2016(cursorPSQL, 'allweeks_clean', cur_nid, ana_date_str, second_date_str)
-        data_frame_full = getTripDataPSQL2016(cursorPSQL, 'allweeks_extra', cur_nid, ana_date_str, second_date_str,
+        data_frame_raw = getMainDataPSQL2016(cursor_psql, 'allweeks_clean', cur_nid, ana_date_str, second_date_str)
+        data_frame_full = getTripDataPSQL2016(cursor_psql, 'allweeks_extra', cur_nid, ana_date_str, second_date_str,
                                               data_frame_raw)
         # print data_frame_full
         if data_frame_full is None:
@@ -136,7 +150,7 @@ def save_manual_pt_df(window_size):
                 continue
 
             # get labels
-            label_pt_tmp = df_cur_trip['gt_mode_manual'].values
+            label_pt_tmp = df_cur_trip['gt_mode_google'].values
 
             if None in label_pt_tmp.tolist():
                 logging.warning("The trip information is invalid")
@@ -160,13 +174,13 @@ def save_manual_pt_df(window_size):
             labels_pt += label_pt_tmp.tolist()
             features_pt += features_pt_tmp.values.tolist()
 
-            cur_user_id = trip_df_labelled.loc[(trip_df_labelled['NID'] == cur_nid) &
-                                               (trip_df_labelled['analyzed_date'] == cur_date) &
-                                               (trip_df_labelled['trip_num'] == tripnum), ['user_id']].values[0][0]
-            trip_dict[trip_count] = [len(features_pt), cur_user_id]
+            pt_count += len(features_pt_tmp.values.tolist())
+            trip_dict[trip_count] = pt_count
             trip_count += 1
 
-    pd.DataFrame(features_pt, columns=DL_FEATURES).to_csv('./data/manual/unnormalized_pt_features_df.csv')
-    pd.DataFrame(labels_pt, columns=['pt_label']).to_csv('./data/manual/unnormalized_pt_labels_df.csv')
-    with open("./data/manual/trip_dict.txt", "wb") as fp:
+    pd.DataFrame(features_pt, columns=DL_FEATURES).to_csv('data/google/unnormalized_pt_features_df_' +
+                                                          str(saved_file_count) + '.csv')
+    pd.DataFrame(labels_pt, columns=['pt_label']).to_csv('data/google/unnormalized_pt_labels_df_' +
+                                                         str(saved_file_count) + '.csv')
+    with open("data/google/trip_dict.txt", "wb") as fp:
         pickle.dump(trip_dict, fp)

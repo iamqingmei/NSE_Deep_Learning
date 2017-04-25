@@ -33,7 +33,6 @@ class AbstractPredictor(object):
         pass
 
 
-
 class DoNothingPredictor(AbstractPredictor):
     """Dummy predictor that simply returns the hardware mode."""
 
@@ -42,7 +41,6 @@ class DoNothingPredictor(AbstractPredictor):
 
     def predict(self, data, mode):
         return data['MODE'].values
-
 
 
 def getStartEndIdx(raw_idx):

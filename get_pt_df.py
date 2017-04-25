@@ -1,13 +1,18 @@
-from app_dataset import save_app_pt_df
-from manual_dataset import save_manual_pt_df
+from data_retrieval.app_dataset import save_app_pt_df
+from data_retrieval.manual_dataset import save_manual_pt_df
+from data_retrieval.google_dataset import save_google_pt_df
 import logging
 import sys
+import params
 
 
 # create logger
 FORMAT = '%(asctime)-15s %(message)s'
 logging.basicConfig(format=FORMAT, level=logging.INFO, stream=sys.stdout)
 
-window_size = 6
+window_size = params.window_size
+# 18 minutes needed to get app and manual pt_df
 save_app_pt_df(window_size)
 save_manual_pt_df(window_size)
+# 4 hours 30 minutes needed to get google pt_df
+save_google_pt_df(window_size)

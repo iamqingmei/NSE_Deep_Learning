@@ -3,14 +3,15 @@ import numpy as np
 from keras.utils.vis_utils import plot_model
 from keras.utils import np_utils
 from sklearn.metrics import confusion_matrix, classification_report, accuracy_score
+# import xgboost as xgb
+from util import chunks
 from collections import Counter
 import os
 import pandas as pd
 from Write_Class import Write
-import params
 
 
-evaluation_report = Write("")
+evaluation_report = Write('')
 
 
 def evaluate_single_model(model, folder_name, model_name, features_test, labels_test, save_model=True):
@@ -53,8 +54,12 @@ def evaluate_single_model(model, folder_name, model_name, features_test, labels_
         print("Saved model to disk")
         plot_model(model, to_file=folder_name + model_name + "_model.png", show_shapes=True)
 
+        del model_json
+
     evaluation_report.add_content(write)
     evaluation_report.add_accuracy(acc)
+
+    del cat_labels_test, loss, acc, write, con_matrix, gt_label, result
     return result_label
 
 
@@ -171,17 +176,29 @@ def evaluate_overall_manual(triplet_model, car_bus_model, features_test, labels_
 
 
 def evaluate_overall_manual_2(vehicle_or_not_model, vehicle_type_model, features_test, labels_test, vehicle_or_not_idx,
-                              vehicle_type_idx):
+                              vehicle_type_idx, if_smooth=True):
     write = "**********Evaluate Overall Result**********\n"
     write += "Using manual labelled data, with 4 labels\n"
-    vehicle_or_not_result = vehicle_or_not_model.predict(features_test[:, vehicle_or_not_idx])
-    vehicle_or_not_result = np.argmax(vehicle_or_not_result, 1)
+    vehicle_or_not_test = np.array(np.array(features_test.iloc[:, vehicle_or_not_idx]))
+    vehicle_or_not_result = vehicle_or_not_model.predict(vehicle_or_not_test)
+    if len(np.shape(vehicle_or_not_result)) > 1:
+        vehicle_or_not_result = np.argmax(vehicle_or_not_result, 1)
 
-    vehicle_type_result = vehicle_type_model.predict(features_test[:, vehicle_type_idx])
-    vehicle_type_result = np.argmax(vehicle_type_result, 1)
+    vehicle_type_test = np.array(features_test.iloc[:, vehicle_type_idx])
+    vehicle_type_result = vehicle_type_model.predict(vehicle_type_test)
+    if len(np.shape(vehicle_type_result)) > 1:
+        vehicle_type_result = np.argmax(vehicle_type_result, 1)
 
     result_label = []
+    trip_chunks = list(chunks(features_test['trip_id'].tolist()))
+    if if_smooth is True:
+        write += "Smoooooooothing vehicle_or_not_result~~~~~~~~\n"
+        for trip_chunk in trip_chunks:
+            vehicle_or_not_result[trip_chunk[0]:trip_chunk[1]] = \
+                smooth_is_vehicle(features_test.iloc[trip_chunk[0]:trip_chunk[1]],
+                                  vehicle_or_not_result[trip_chunk[0]:trip_chunk[1]])
 
+    # is_vehicle_smoothing()
     for idx, t in enumerate(vehicle_or_not_result):
         if t == 0:  # stationary or stop
             result_label.append(5)
@@ -196,7 +213,14 @@ def evaluate_overall_manual_2(vehicle_or_not_model, vehicle_type_model, features
                 print("Error in overall evaluation: wrong label!"+vehicle_type_model[idx])
         else:  # t[1] == 2
             print("Error in overall evaluation: wrong label! at idx %d, %d" % (idx, t))
+    if if_smooth is True:
+        write += "Smoooooooothing smooth_vehicle_type~~~~~~~~\n"
+        for trip_chunk in trip_chunks:
+            result_label[trip_chunk[0]:trip_chunk[1]] = \
+                smooth_vehicle_type(features_test.iloc[trip_chunk[0]:trip_chunk[1]],
+                                    result_label[trip_chunk[0]:trip_chunk[1]])
 
+    write += str(Counter(labels_test)) + '\n'
     con_matrix = confusion_matrix(labels_test, result_label)
     acc = accuracy_score(labels_test, result_label)
     write += str(con_matrix) + '\n'
@@ -206,54 +230,167 @@ def evaluate_overall_manual_2(vehicle_or_not_model, vehicle_type_model, features
     evaluation_report.add_content(write)
     evaluation_report.add_accuracy(acc)
 
+    del write, vehicle_or_not_test, vehicle_or_not_result, vehicle_type_test, vehicle_type_result, trip_chunks, \
+        con_matrix, acc
+
     return result_label
 
 
-def save_predicted_result_in_csv(result_labels, df, folder_name, all_features, model_name, label_type):
+def evaluate_overall_lstm(vehicle_or_not_model, vehicle_type_model, features_test, labels_test, vehicle_or_not_idx,
+                              vehicle_type_idx, if_smooth = True):
+    write = "**********Evaluate Overall Result**********\n"
+    write += "Using manual labelled data, with 4 labels\n"
+    vehicle_or_not_test = np.reshape(np.array(features_test.iloc[:, vehicle_or_not_idx]),
+                                     (len(features_test),
+                                      6,
+                                      int(len(vehicle_or_not_idx)/6)))
+    vehicle_or_not_result = vehicle_or_not_model.predict(vehicle_or_not_test)
+    if len(np.shape(vehicle_or_not_result)) > 1:
+        vehicle_or_not_result = np.argmax(vehicle_or_not_result, 1)
+
+    vehicle_type_test = np.reshape(np.array(features_test.iloc[:, vehicle_type_idx]),
+                                   (len(features_test),
+                                    6,
+                                    int(len(vehicle_type_idx) / 6)))
+    vehicle_type_result = vehicle_type_model.predict(vehicle_type_test)
+    if len(np.shape(vehicle_type_result)) > 1:
+        vehicle_type_result = np.argmax(vehicle_type_result, 1)
+
+    result_label = []
+    trip_chunks = list(chunks(features_test['trip_id'].tolist()))
+    if if_smooth is True:
+        write += "Smoooooooothing vehicle_or_not_result~~~~~~~~\n"
+        for trip_chunk in trip_chunks:
+            vehicle_or_not_result[trip_chunk[0]:trip_chunk[1]] = \
+                smooth_is_vehicle(features_test.iloc[trip_chunk[0]:trip_chunk[1]],
+                                  vehicle_or_not_result[trip_chunk[0]:trip_chunk[1]])
+
+    # is_vehicle_smoothing()
+    for idx, t in enumerate(vehicle_or_not_result):
+        if t == 0:  # stationary or stop
+            result_label.append(5)
+        elif t == 1:  # vehicle
+            if vehicle_type_result[idx] == 0:
+                result_label.append(2)  # mrt
+            elif vehicle_type_result[idx] == 1:
+                result_label.append(3)  # bus
+            elif vehicle_type_result[idx] == 2:
+                result_label.append(4)  # car
+            else:
+                print("Error in overall evaluation: wrong label!"+vehicle_type_model[idx])
+        else:  # t[1] == 2
+            print("Error in overall evaluation: wrong label! at idx %d, %d" % (idx, t))
+    if if_smooth is True:
+        write += "Smoooooooothing smooth_vehicle_type~~~~~~~~\n"
+        for trip_chunk in trip_chunks:
+            result_label[trip_chunk[0]:trip_chunk[1]] = \
+                smooth_vehicle_type(features_test.iloc[trip_chunk[0]:trip_chunk[1]],
+                                    result_label[trip_chunk[0]:trip_chunk[1]])
+
+    write += str(Counter(labels_test)) + '\n'
+    con_matrix = confusion_matrix(labels_test, result_label)
+    acc = accuracy_score(labels_test, result_label)
+    write += str(con_matrix) + '\n'
+    write += "Classification report:\n"
+    write += str(classification_report(labels_test, result_label)) + '\n'
+
+    evaluation_report.add_content(write)
+    evaluation_report.add_accuracy(acc)
+
+    del write, vehicle_or_not_test, vehicle_or_not_result, vehicle_type_test, vehicle_type_result, trip_chunks, \
+        con_matrix, acc
+
+    return result_label
+
+
+def evaluate_overall_bibibinary(vehicle_or_not_model, bus_or_not_model, mrt_or_car_model,
+                                features_test, labels_test, vehicle_or_not_idx,
+                                bus_or_not_idx, mrt_or_car_idx, if_smooth=True):
+    write = "**********Evaluate Overall Result**********\n"
+    write += "with 4 labels\n"
+    vehicle_or_not_result = vehicle_or_not_model.predict(np.array(features_test.iloc[:, vehicle_or_not_idx]))
+    if len(np.shape(vehicle_or_not_result)) > 1:
+        vehicle_or_not_result = np.argmax(vehicle_or_not_result, 1)
+
+    bus_or_not_result = bus_or_not_model.predict(np.array(features_test.iloc[:, bus_or_not_idx]))
+    if len(np.shape(bus_or_not_result)) > 1:
+        bus_or_not_result = np.argmax(bus_or_not_result, 1)
+
+    mrt_or_car_result = mrt_or_car_model.predict(np.array(features_test.iloc[:, mrt_or_car_idx]))
+    if len(np.shape(mrt_or_car_result)) > 1:
+        mrt_or_car_result = np.argmax(mrt_or_car_result, 1)
+
+    result_label = []
+    trip_chunks = list(chunks(features_test['trip_id'].tolist()))
+    if if_smooth is True:
+        for trip_chunk in trip_chunks:
+            vehicle_or_not_result[trip_chunk[0]:trip_chunk[1]] = \
+                smooth_is_vehicle(features_test.iloc[trip_chunk[0]:trip_chunk[1]],
+                                  vehicle_or_not_result[trip_chunk[0]:trip_chunk[1]])
+
+    for idx, t in enumerate(vehicle_or_not_result):
+        if t == 0:  # stationary or stop
+            result_label.append(5)
+        elif t == 1:  # vehicle
+            if bus_or_not_result[idx] == 0:
+                if mrt_or_car_result[idx] == 0:
+                    result_label.append(2)  # mrt
+                elif mrt_or_car_result[idx] == 1:
+                    result_label.append(4)  # car
+            elif bus_or_not_result[idx] == 1:
+                result_label.append(3)  # bus
+            else:
+                print("Error in overall evaluation: wrong label! at idx: %d" % idx)
+        else:  # t[1] == 2
+            print("Error in overall evaluation: wrong label! at idx %d, %d" % (idx, t))
+
+    write += str(Counter(labels_test)) + '\n'
+    con_matrix = confusion_matrix(labels_test, result_label)
+    acc = accuracy_score(labels_test, result_label)
+    write += str(con_matrix) + '\n'
+    write += "Classification report:\n"
+    write += str(classification_report(labels_test, result_label)) + '\n'
+
+    evaluation_report.add_content(write)
+    evaluation_report.add_accuracy(acc)
+
+    del write, vehicle_or_not_result, bus_or_not_result, mrt_or_car_result, trip_chunks, con_matrix, acc
+
+    return result_label
+
+
+def save_predicted_result_in_csv(result_labels, df, folder_name, model_name, label_type):
     """
     Save the predicted result into a csv, with ground truth label, location information and trip_id
     :param result_labels: The predicted label
     :param df: The dataframe containing all the information
     :param folder_name: The folder name to save
-    :param all_features: a list of all the features included in df.
     :param model_name: The name of the model evaluated.
     :param label_type: The type of label we are using
     :return: None
     """
     # Save the predicted result into a csv
 
-    # each win label is assigned to the last pt in the win
-    lat_idx = all_features.index('WLATITUDE') + len(all_features) * (params.window_size - 1)
-    lon_idx = all_features.index('WLONGITUDE') + len(all_features) * (params.window_size - 1)
-    lat_lon = df.iloc[:, [lat_idx, lon_idx]]
-    lat_lon.columns = ['WLATITUDE', 'WLONGITUDE']
-
-    min_lon_sg = 103.565276
-    max_lon_sg = 104
-    min_lat_sg = 1.235578
-    max_lat_sg = 1.479055
-    lat_lon = lat_lon.assign(WLATITUDE=list(map(lambda x: (x * (max_lat_sg - min_lat_sg) + min_lat_sg)*(x != 0),
-                                                list(lat_lon['WLATITUDE']))))
-    lat_lon = lat_lon.assign(WLONGITUDE=list(map(lambda x: (x * (max_lon_sg - min_lon_sg) + min_lon_sg)*(x != 0),
-                                                 list(lat_lon['WLONGITUDE']))))
-    lat_lon = lat_lon.replace({0: -1}, regex=True)
-
-    df_to_save = pd.DataFrame(np.array(lat_lon), columns=['WLATITUDE', 'WLONGITUDE'])
-    df_to_save['pt_label'] = pd.Series(result_labels)
-    df_to_save['gt_label'] = pd.Series(np.array(df[label_type]))
-    df_to_save['trip_id'] = pd.Series(np.array(df['trip_id']))
+    df_to_save = df[['WLATITUDE', 'WLONGITUDE']].copy()
+    df_to_save.index = list(range(len(df_to_save)))
+    df_to_save['pt_label'] = pd.Series(result_labels, index=df_to_save.index)
+    df_to_save['gt_label'] = pd.Series(np.array(df[label_type]), index=df_to_save.index)
+    df_to_save['trip_id'] = pd.Series(np.array(df['trip_id']), index=df_to_save.index)
 
     df_to_save.to_csv(folder_name + model_name + '_test_result_pt.csv')
 
+    del df_to_save
 
-def init_write(opt, train_opt, features, manual_win_df, app_win_df):
+
+def init_write(opt, train_opt, features, train_df=None, test_df=None):
     """
-    Initiate the evaluation report:training options, general options, features, distribution of each class in the dataset
+    Initiate the evaluation report:training options, general options, features, distribution of each class in the
+    dataset
     :param opt: general options
     :param train_opt: training options
     :param features: features used for each model
-    :param manual_win_df: the window dataframe of manually labelled data
-    :param app_win_df: the window dataframe of app labelled data
+    :param train_df: the window dataframe of manually labelled data
+    :param test_df: the window dataframe of app labelled data
     :return: None
     """
     write = "Evaluation Report of Train_Hierarchical \n"
@@ -261,9 +398,16 @@ def init_write(opt, train_opt, features, manual_win_df, app_win_df):
     write += "General option: \n" + str(opt) + "\n"
     write += "Train option: \n" + str(train_opt) + "\n"
     write += "Features: \n" + str(features) + "\n"
-    write += "Manual_win_df: " + str(Counter(manual_win_df[opt['label_type']])) + '\n'
-    write += "App_win_df: " + str(Counter(app_win_df[opt['label_type']])) + '\n'
+    if train_df is not None:
+        write += "Train_df size: " + str(len(train_df)) + '\n'
+        write += "Train_df[all_based_win_label]: " + str(Counter(train_df['all_based_win_label'])) + '\n'
+        write += "Train_df[last_based_win_label]: " + str(Counter(train_df['last_based_win_label'])) + '\n'
+        write += "Test_df size: " + str(len(test_df)) + '\n'
+        write += "Test_df[all_based_win_label]: " + str(Counter(test_df['all_based_win_label'])) + '\n'
+        write += "Test_df[last_based_win_label]: " + str(Counter(test_df['last_based_win_label'])) + '\n'
     evaluation_report.add_content(write)
+
+    del write
 
 
 def save_write(folder_name):
@@ -273,3 +417,85 @@ def save_write(folder_name):
     :return: None
     """
     evaluation_report.save_write(folder_name)
+    evaluation_report.clear_content()
+
+
+def evaluate_single_ml_model(clf, features_test, labels_test, target_names, folder_name):
+    write = ''
+    # use cross validation to test accuracy
+    # write += "***** Cross Validation *****\n"
+    # scores = cross_val_score(clf, features_train.tolist(), labels_train.tolist(), cv=10)
+    # write += "All scores:\n"
+    # write += str(scores) + '\n'
+    write += str(clf) + '\n'
+    "***** Training & Testing *****"
+    # features_test = xgb.DMatrix(features_test)
+    result_labels = clf.predict(features_test)
+    result_labels = np.array(result_labels)
+    con_matx = confusion_matrix(labels_test, result_labels)
+    write += "Confusion matrix:\n"
+    write += str(con_matx) + '\n'
+    write += "Classification report:\n"
+    write += str(classification_report(labels_test, result_labels, target_names=target_names)) + '\n'
+    acc = accuracy_score(labels_test, result_labels)
+    # show the importance of each feature
+    # write += "Importance of each feature:\n"
+    #
+    # write += str(clf.feature_importances_) + '\n'
+
+    #  create folder if not exists
+    if not os.path.exists(folder_name):
+        os.makedirs(folder_name)
+
+    evaluation_report.add_content(write)
+    evaluation_report.add_accuracy(acc)
+
+    del write, con_matx, acc
+    return result_labels
+
+
+def smooth_is_vehicle(df_trip, vehicle_or_not,  non_vehi_seg_min_dura=1 * 60, vehi_seg_min_dura=2.5 * 60):
+    vehicle_or_not_chunks = list(chunks(vehicle_or_not))
+    dt_all = df_trip['TIME_DELTA']
+    vehicle_or_not_smoothed = vehicle_or_not
+    # remove short non-vehicle segments between vehicle segments
+    num_chunks = len(vehicle_or_not_chunks)
+    for idx, chunk in enumerate(vehicle_or_not_chunks):
+        if idx != 0 and idx != num_chunks - 1 and vehicle_or_not[chunk[0]] == 0:
+            chunk_dura = sum(dt_all[chunk[0]:chunk[1]])
+            if chunk_dura < non_vehi_seg_min_dura:
+                vehicle_or_not_smoothed[chunk[0]:chunk[1]] = [1] * (chunk[1] - chunk[0])
+    # remove vehicle segments which are still short after combining
+    is_vehicle_chunks = list(chunks(vehicle_or_not_smoothed))
+    for chunk in is_vehicle_chunks:
+        if vehicle_or_not[chunk[0]] == 1:
+            chunk_dura = sum(dt_all[chunk[0]:chunk[1]])
+            if chunk_dura < vehi_seg_min_dura:
+                vehicle_or_not_smoothed[chunk[0]:chunk[1]] = [0] * (chunk[1] - chunk[0])
+
+    del vehicle_or_not_chunks, dt_all, num_chunks, is_vehicle_chunks
+    return vehicle_or_not_smoothed
+
+
+def smooth_vehicle_type(df_trip, original_result_label, vehi_seg_min_dura=1 * 60):
+    trip_segments = list(chunks(original_result_label, True))
+    dt_all = df_trip['TIME_DELTA']
+    res = original_result_label
+
+    num_chunks = len(trip_segments)
+
+    for idx, chunk in enumerate(trip_segments):
+        if idx == 0 or idx == num_chunks-1 or chunk[2] == 5:
+            continue
+        pre_label = trip_segments[idx-1][2]
+        post_label = trip_segments[idx + 1][2]
+        if pre_label == post_label:
+            if pre_label == 5:
+                continue
+            else:
+                cur_chunk_duration = sum(dt_all[chunk[0]:chunk[1]])
+                if cur_chunk_duration < vehi_seg_min_dura:
+                    res[chunk[0]:chunk[1]] = [pre_label] * (chunk[1] - chunk[0])
+
+    del trip_segments, dt_all, num_chunks
+    return res

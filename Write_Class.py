@@ -1,3 +1,6 @@
+import datetime
+
+
 class Write:
     """
     A class object, which will handle all the writing content to save into a txt file, after training and testing.
@@ -33,7 +36,8 @@ class Write:
         :param folder_name: The folder_name to save txt file
         :return: None
         """
-        file_name = 'report_acc' + '_%0.2f' * len(self.accuracies) % tuple(self.accuracies) + '.txt'
+        file_name = 'report_' + str(datetime.datetime.now().strftime("%m-%d %H:%M")) + 'acc' + \
+                    '_%0.2f' * len(self.accuracies) % tuple(self.accuracies) + '.txt'
         with open(folder_name + file_name, 'w') as f:
             f.truncate()
             f.write(self.write)
@@ -41,3 +45,7 @@ class Write:
 
         print(self.write)
         print("Write saved")
+
+    def clear_content(self):
+        self.write = ''
+        self.accuracies = []

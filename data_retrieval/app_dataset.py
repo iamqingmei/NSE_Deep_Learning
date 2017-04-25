@@ -4,8 +4,8 @@ import datetime
 import psycopg2
 import params
 import pandas as pd
-from dbConnPSQL import getLabelledDataAll, getMainDataPSQL2016, getTripDataPSQL2016
-from feature_calc import calc_extra_features, calc_geo_time_features, clean_geo_data, DL_FEATURES, cal_busmrt_dist
+from .dbConnPSQL import getLabelledDataAll, getMainDataPSQL2016, getTripDataPSQL2016
+from .feature_calc import calc_extra_features, calc_geo_time_features, clean_geo_data, DL_FEATURES, cal_busmrt_dist
 import pickle
 import os
 
@@ -24,17 +24,17 @@ def save_app_pt_df(window_size):
     label_type = "app"
 
     #  create folder if not exists
-    if not os.path.exists('./data/app/'):
-        os.makedirs('./data/app/')
+    if not os.path.exists('data/app/'):
+        os.makedirs('data/app/')
 
-    # conCom = """dbname='nse_mode_id' user='postgres' password='"""+dbpw_str+"""' host='localhost'"""
-    conCom = """dbname='""" + params.dbname_str + """' user='""" + params.dbuser_str + """' password='""" + \
-             params.dbpw_str + """' host='""" + params.dbhost + """' port ='""" + params.dbport + """' """
-    connPSQL = psycopg2.connect(conCom)
-    cursorPSQL = connPSQL.cursor()
+    # con_com = """dbname='nse_mode_id' user='postgres' password='"""+dbpw_str+"""' host='localhost'"""
+    con_com = """dbname='""" + params.dbname_str + """' user='""" + params.dbuser_str + """' password='""" + \
+              params.dbpw_str + """' host='""" + params.dbhost + """' port ='""" + params.dbport + """' """
+    conn_psql = psycopg2.connect(con_com)
+    cursor_psql = conn_psql.cursor()
 
     # queary for all vehicle labelled data
-    trip_df_labelled = getLabelledDataAll(cursorPSQL, "allweeks_tripsummary", label_type, max_num=None)
+    trip_df_labelled = getLabelledDataAll(cursor_psql, "allweeks_tripsummary", label_type, max_num=None)
     # Returns trip_df_labelled which consists of a data frame of all node ID's which have been labelled
     # which are of type 'vehicle' vehicle = 4,5,6 MRT/Bus/Car
 
@@ -58,8 +58,6 @@ def save_app_pt_df(window_size):
     # print unique_nid_date_with_tripnum
 
     # initialization
-    features_win = []
-    labels_win = []
     features_pt = []
     labels_pt = []
     lat_pt = []
@@ -78,8 +76,8 @@ def save_app_pt_df(window_size):
         ana_date_tuple = datetime.datetime.strptime(str(cur_date), '%Y%m%d')
         ana_date_str = ana_date_tuple.strftime('%Y-%m-%d')
         second_date_str = (ana_date_tuple + datetime.timedelta(days=1)).strftime('%Y-%m-%d')
-        data_frame_raw = getMainDataPSQL2016(cursorPSQL, 'allweeks_clean', cur_nid, ana_date_str, second_date_str)
-        data_frame_full = getTripDataPSQL2016(cursorPSQL, 'allweeks_extra', cur_nid, ana_date_str, second_date_str,
+        data_frame_raw = getMainDataPSQL2016(cursor_psql, 'allweeks_clean', cur_nid, ana_date_str, second_date_str)
+        data_frame_full = getTripDataPSQL2016(cursor_psql, 'allweeks_extra', cur_nid, ana_date_str, second_date_str,
                                               data_frame_raw)
 
         # print data_frame_full
@@ -98,9 +96,9 @@ def save_app_pt_df(window_size):
         # ['MOV_AVE_ACCELERATION']['ACCELERATION']['VELOCITY']['MOV_AVE_VELOCITY']
         # ['DISTANCE_DELTA']['TIME_DELTA']['STEPS_DELTA']
         logging.info("Calculate geo and time features: ")
-        success_featCalc = calc_geo_time_features(data_frame_full, ana_date_str, window_size)
+        success_feat_calc = calc_geo_time_features(data_frame_full, ana_date_str, window_size)
 
-        if not success_featCalc:
+        if not success_feat_calc:
             continue
 
         cal_busmrt_dist(data_frame_full)
@@ -166,7 +164,7 @@ def save_app_pt_df(window_size):
     # for i in range(10):
     #     print trip_dict[i]
 
-    pd.DataFrame(features_pt, columns=DL_FEATURES).to_csv('./data/app/unnormalized_pt_features_df.csv')
-    pd.DataFrame(labels_pt, columns=['pt_label']).to_csv('./data/app/unnormalized_pt_labels_df.csv')
-    with open("./data/app/trip_dict.txt", "wb") as fp:
+    pd.DataFrame(features_pt, columns=DL_FEATURES).to_csv('data/app/unnormalized_pt_features_df.csv')
+    pd.DataFrame(labels_pt, columns=['pt_label']).to_csv('data/app/unnormalized_pt_labels_df.csv')
+    with open("data/app/trip_dict.txt", "wb") as fp:
         pickle.dump(trip_dict, fp)

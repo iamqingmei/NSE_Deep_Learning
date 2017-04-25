@@ -4,21 +4,18 @@ import numpy as np
 import pandas as pd
 from util import chunks_real, chunks, great_circle_dist, get_hour_SGT, moving_std, moving_dr, moving_ave_velocity
 from util import apply_DBSCAN
-import TransitHeuristic
+from . import TransitHeuristic
 import logging
 import random
 from collections import Counter
+import params
 
-
-DL_FEATURES = ['MOV_AVE_VELOCITY', 'STDACC', 'MEANMAG', 'MAXGYR', 'PRESSURE', 'STDPRES_WIN', 'NUM_AP', 'WLATITUDE',
-               'WLONGITUDE', 'is_localized', 'METRO_DIST', 'BUS_DIST', 'STEPS', 'NOISE', 'TIME_DELTA', 'TEMPERATURE',
-               'IRTEMPERATURE', 'HUMIDITY', 'STD_VELOCITY_10MIN', 'VELOCITY', 'TIMESTAMP',
+DL_FEATURES = ['NID', 'MOV_AVE_VELOCITY', 'STDACC', 'MEANMAG', 'MAXGYR', 'PRESSURE', 'STDPRES_WIN', 'NUM_AP',
+               'WLATITUDE', 'WLONGITUDE', 'is_localized', 'METRO_DIST', 'BUS_DIST', 'STEPS', 'NOISE', 'TIME_DELTA',
+               'TEMPERATURE', 'IRTEMPERATURE', 'HUMIDITY', 'STD_VELOCITY_10MIN', 'VELOCITY', 'TIMESTAMP',
                'STOP_10MIN', 'STOP_BUSSTOP_10MIN']
 
 WIN_FEATURES = []
-
-BUS_VELOCITY_THRESHOLD = 5.5
-NEAR_BUS_STOP_THRESHOLD = 10
 
 
 def calc_geo_time_features(data_frame, queried_date_str, window_size, high_velocity_thresh=40):
@@ -44,7 +41,7 @@ def calc_geo_time_features(data_frame, queried_date_str, window_size, high_veloc
     # calculate time delta since the last measurement, in seconds
     a = np.array(data_frame.iloc[:-1]['TIMESTAMP'])
     b = np.array(data_frame.iloc[1:]['TIMESTAMP'])
-    delta_timestamps = list(b-a)
+    delta_timestamps = list(b - a)
     if data_frame['TIME_SGT'][0] < 1.5:
         # add dt to 24 am for the first measurement when first point is within 24 am to 1.5am
         delta_timestamps = [int(data_frame['TIME_SGT'][0] * 3600)] + delta_timestamps
@@ -341,10 +338,10 @@ def waiting_time_calc(starting_ts, df_all_day, backward_dura=20 * 60, forward_du
                                                      waiting_range, waiting_pts)
     logging.debug(cluster_labels)
     cluster_labels = np.array(cluster_labels)
-    uniq_clusters = np.unique(cluster_labels)
-    logging.debug(uniq_clusters)
+    unique_clusters = np.unique(cluster_labels)
+    logging.debug(unique_clusters)
     waiting_times = []
-    for cluster in uniq_clusters:
+    for cluster in unique_clusters:
         if cluster > -1:
             waiting_times.append(np.sum(df_possible_waiting.loc[cluster_labels == cluster, 'TIME_DELTA']))
     logging.debug(waiting_times)
@@ -363,32 +360,32 @@ def vehicle_seg_feature_calc(df_vehi_seg, df_all_day, train_dist=150, bus_dist=1
     bus_dist: distance from bus station in m
     default_dist: default distance from staions if no close staions are found
     Output:
-    featureDict: distionary which contains all segment-level features
+    feature_dict: distionary which contains all segment-level features
     """
 
     # initialize heuristics
     train_heuristic = TransitHeuristic.TrainPredictor()
     bus_heuristic = TransitHeuristic.BusMapPredictor()
 
-    featureDict = {}
+    feature_dict = {}
     # First velocity
-    featureDict['first_vel'] = df_vehi_seg['MOV_AVE_VELOCITY'].iloc[0]
+    feature_dict['first_vel'] = df_vehi_seg['MOV_AVE_VELOCITY'].iloc[0]
     # Duration
-    featureDict['dur'] = df_vehi_seg['TIME_DELTA'].sum()
+    feature_dict['dur'] = df_vehi_seg['TIME_DELTA'].sum()
     # 85th percentile of velocity
-    featureDict['85th'] = np.percentile(df_vehi_seg['MOV_AVE_VELOCITY'].as_matrix(), 85)
+    feature_dict['85th'] = np.percentile(df_vehi_seg['MOV_AVE_VELOCITY'].as_matrix(), 85)
     # Distance
-    featureDict['dist'] = df_vehi_seg['DISTANCE_DELTA'].sum()
-    if featureDict['dist'] != 0:
-        featureDict['mean_vel'] = featureDict['dist'] / featureDict['dur']
+    feature_dict['dist'] = df_vehi_seg['DISTANCE_DELTA'].sum()
+    if feature_dict['dist'] != 0:
+        feature_dict['mean_vel'] = feature_dict['dist'] / feature_dict['dur']
     else:
         # all unlocalized points contibutes to 0 distance
-        featureDict['mean_vel'] = np.nanmean(df_vehi_seg['MOV_AVE_VELOCITY'].as_matrix())
-        featureDict['dist'] = featureDict['mean_vel'] * featureDict['dur']
+        feature_dict['mean_vel'] = np.nanmean(df_vehi_seg['MOV_AVE_VELOCITY'].as_matrix())
+        feature_dict['dist'] = feature_dict['mean_vel'] * feature_dict['dur']
 
     # 95th percentil of acceleration
     acc_mat = df_vehi_seg['MOV_AVE_ACCELERATION'].as_matrix()
-    featureDict['95th'] = np.percentile(acc_mat[~np.isnan(acc_mat)], 95)
+    feature_dict['95th'] = np.percentile(acc_mat[~np.isnan(acc_mat)], 95)
 
     df_vehi_seg_validloc = df_vehi_seg.loc[~np.isnan(df_vehi_seg['WLATITUDE'])]
     if len(df_vehi_seg_validloc) > 0:
@@ -397,98 +394,99 @@ def vehicle_seg_feature_calc(df_vehi_seg, df_all_day, train_dist=150, bus_dist=1
         last_valid_lat = df_vehi_seg_validloc['WLATITUDE'].iloc[-1]
         last_valid_lon = df_vehi_seg_validloc['WLONGITUDE'].iloc[-1]
         # Distance between first point to nearest bus
-        closeBusStops_begin = TransitHeuristic.find_nearest_station(first_valid_lat, first_valid_lon, \
-                                                                    bus_heuristic.bus_location_tree)
-        if len(closeBusStops_begin) > 0:
-            dist2all = [busstop[1] for busstop in closeBusStops_begin]
-            featureDict['first_bus'] = min(dist2all)
+        close_bus_stops_begin = TransitHeuristic.find_nearest_station(first_valid_lat, first_valid_lon,
+                                                                      bus_heuristic.bus_location_tree)
+        if len(close_bus_stops_begin) > 0:
+            dist2all = [bus_stop[1] for bus_stop in close_bus_stops_begin]
+            feature_dict['first_bus'] = min(dist2all)
         else:  # just chooses the first tuple - TODO iterate for find the lowest distance
-            featureDict['first_bus'] = default_dist  # np.NaN# closeBusStops_begin[0][1]
+            feature_dict['first_bus'] = default_dist  # np.NaN# close_bus_stops_begin[0][1]
         # Distance between last point to nearest bus
-        closeBusStops_end = TransitHeuristic.find_nearest_station(last_valid_lat, last_valid_lon, \
-                                                                  bus_heuristic.bus_location_tree, bus_dist)
-        if len(closeBusStops_end) > 0:
-            dist2all = [busstop[1] for busstop in closeBusStops_end]
-            featureDict['last_bus'] = min(dist2all)
+        close_bus_stops_end = TransitHeuristic.find_nearest_station(last_valid_lat, last_valid_lon,
+                                                                    bus_heuristic.bus_location_tree, bus_dist)
+        if len(close_bus_stops_end) > 0:
+            dist2all = [bus_stop[1] for bus_stop in close_bus_stops_end]
+            feature_dict['last_bus'] = min(dist2all)
         else:  # just chooses the first tuple - TODO iterate for find the lowest distance
-            featureDict['last_bus'] = default_dist  # np.NaN#closeBusStops_end[0][1]
+            feature_dict['last_bus'] = default_dist  # np.NaN#close_bus_stops_end[0][1]
         # Distance between first point to nearest MRT
-        closeTrainStation_begin = TransitHeuristic.find_nearest_station(first_valid_lat, first_valid_lon, \
-                                                                        train_heuristic.train_location_tree, train_dist)
-        if len(closeTrainStation_begin) > 0:
-            dist2all = [mrtstation[1] for mrtstation in closeTrainStation_begin]
-            featureDict['first_train'] = min(dist2all)
-            # featureDict['first_train']  = closeTrainStation_begin[0][1]
+        close_train_station_begin = TransitHeuristic.find_nearest_station(first_valid_lat, first_valid_lon,
+                                                                          train_heuristic.train_location_tree,
+                                                                          train_dist)
+        if len(close_train_station_begin) > 0:
+            dist2all = [mrt_station[1] for mrt_station in close_train_station_begin]
+            feature_dict['first_train'] = min(dist2all)
+            # feature_dict['first_train']  = close_train_station_begin[0][1]
         else:  # just chooses the first tuple - TODO iterate for find the lowest distance
-            featureDict['first_train'] = default_dist  # np.NaN #closeTrainStation_begin[0][1]
+            feature_dict['first_train'] = default_dist  # np.NaN #close_train_station_begin[0][1]
         # Distance between last point to nearest MRT
-        closeTrainStation_end = TransitHeuristic.find_nearest_station(last_valid_lat, last_valid_lon, \
-                                                                      train_heuristic.train_location_tree, train_dist)
-        if len(closeTrainStation_end) > 0:
-            dist2all = [mrtstation[1] for mrtstation in closeTrainStation_end]
-            featureDict['last_train'] = min(dist2all)
+        close_train_station_end = TransitHeuristic.find_nearest_station(last_valid_lat, last_valid_lon,
+                                                                        train_heuristic.train_location_tree, train_dist)
+        if len(close_train_station_end) > 0:
+            dist2all = [mrt_station[1] for mrt_station in close_train_station_end]
+            feature_dict['last_train'] = min(dist2all)
         else:  # just chooses the first tuple - TODO iterate for find the lowest distance
-            featureDict['last_train'] = default_dist  # np.NaN# closeTrainStation_end[0][1]
+            feature_dict['last_train'] = default_dist  # np.NaN# close_train_station_end[0][1]
     else:
-        featureDict['first_bus'] = default_dist
-        featureDict['last_bus'] = default_dist
-        featureDict['first_train'] = default_dist
-        featureDict['last_train'] = default_dist
+        feature_dict['first_bus'] = default_dist
+        feature_dict['last_bus'] = default_dist
+        feature_dict['first_train'] = default_dist
+        feature_dict['last_train'] = default_dist
 
     dist_to_bus = []
     dist_to_train = []
     lats = df_vehi_seg['WLATITUDE'].as_matrix()  # TODO remove iterate over all rows! Strange behaviour using iterrows()
     lons = df_vehi_seg['WLONGITUDE'].as_matrix()
     for i in range(0, len(lats)):
-        if (not np.isnan(lats[i]) and not np.isnan(lons[i])):
-            closeBusStops_iter = TransitHeuristic.find_nearest_station(lats[i], lons[i], \
-                                                                       bus_heuristic.bus_location_tree, bus_dist * 10)
+        if not np.isnan(lats[i]) and not np.isnan(lons[i]):
+            close_bus_stops_iter = TransitHeuristic.find_nearest_station(lats[i], lons[i],
+                                                                         bus_heuristic.bus_location_tree, bus_dist * 10)
 
-            closeTrainStops_iter = TransitHeuristic.find_nearest_station(lats[i], lons[i], \
-                                                                         train_heuristic.train_location_tree,
-                                                                         train_dist * 10)
+            close_train_stops_iter = TransitHeuristic.find_nearest_station(lats[i], lons[i],
+                                                                           train_heuristic.train_location_tree,
+                                                                           train_dist * 10)
 
-            if len(closeBusStops_iter) > 0:
-                dist2all = [busstop[1] for busstop in closeBusStops_iter]
+            if len(close_bus_stops_iter) > 0:
+                dist2all = [bus_stop[1] for bus_stop in close_bus_stops_iter]
                 dist_to_bus.append(min(dist2all))
 
-            if len(closeTrainStops_iter) > 0:
-                dist2all = [trainstop[1] for trainstop in closeTrainStops_iter]
+            if len(close_train_stops_iter) > 0:
+                dist2all = [train_stop[1] for train_stop in close_train_stops_iter]
                 dist_to_train.append(min(dist2all))
 
     if len(dist_to_bus) > 0:
         # Average distance to nearest bus stop
-        featureDict['mean_dist_to_bus'] = np.mean(dist_to_bus)
+        feature_dict['mean_dist_to_bus'] = np.mean(dist_to_bus)
         # Variance in distance to nearest bus stop
-        featureDict['var_dist_to_bus'] = np.var(dist_to_bus)
+        feature_dict['var_dist_to_bus'] = np.var(dist_to_bus)
     else:
         # Average distance to nearest bus stop
-        featureDict['mean_dist_to_bus'] = default_dist
+        feature_dict['mean_dist_to_bus'] = default_dist
         # Variance in distance to nearest bus stop
-        featureDict['var_dist_to_bus'] = default_dist
+        feature_dict['var_dist_to_bus'] = default_dist
 
     if len(dist_to_train) > 0:
         # Average distance to nearest MRT
-        featureDict['mean_dist_to_train'] = np.mean(dist_to_train)
+        feature_dict['mean_dist_to_train'] = np.mean(dist_to_train)
         # Variance in distance to nearest MRT
-        featureDict['var_dist_to_train'] = np.var(dist_to_train)
+        feature_dict['var_dist_to_train'] = np.var(dist_to_train)
     else:
         # Average distance to nearest MRT
-        featureDict['mean_dist_to_train'] = default_dist
+        feature_dict['mean_dist_to_train'] = default_dist
         # Variance in distance to nearest MRT
-        featureDict['var_dist_to_train'] = default_dist
+        feature_dict['var_dist_to_train'] = default_dist
 
     # STD of mean_mag over the entire segment
-    featureDict['std_mean_mag'] = np.nanstd(df_vehi_seg['MEANMAG'].values)
+    feature_dict['std_mean_mag'] = np.nanstd(df_vehi_seg['MEANMAG'].values)
 
     # Percentage of distance gaps (point clusters without location) over the segment (Number of NaN points)
-    featureDict['nan_percentage'] = float(len(df_vehi_seg.loc[np.isnan(df_vehi_seg['WLATITUDE'])])) / len(df_vehi_seg)
+    feature_dict['nan_percentage'] = float(len(df_vehi_seg.loc[np.isnan(df_vehi_seg['WLATITUDE'])])) / len(df_vehi_seg)
 
     # Waiting time before the vehicle segment starts
     starting_ts = df_vehi_seg['TIMESTAMP'].values[0]
-    featureDict['waiting_time'] = waiting_time_calc(starting_ts, df_all_day)
+    feature_dict['waiting_time'] = waiting_time_calc(starting_ts, df_all_day)
 
-    return featureDict
+    return feature_dict
 
 
 def calculate_stairs(data_frame):
@@ -498,7 +496,7 @@ def calculate_stairs(data_frame):
     of stairs per floor. 
     """
     # Smoothing for pressure
-    nsmooth = 3
+    n_smooth = 3
     # Time gap threshold for determining unique pressure plateaus
     climb_time_thresh = 2
     # Stable pressure point threshold for determining pressure plateau
@@ -506,7 +504,7 @@ def calculate_stairs(data_frame):
     # Initialize stairs to 0
     stairs = 0
 
-    dpdt = smooth((np.diff(smooth(data_frame['PRESSURE'], nsmooth)) / np.diff(data_frame['TIMESTAMP'])), nsmooth / 2)
+    dpdt = smooth((np.diff(smooth(data_frame['PRESSURE'], n_smooth)) / np.diff(data_frame['TIMESTAMP'])), n_smooth / 2)
 
     stab_idx_array = np.zeros(len(dpdt))
     dp_limit_high = 1
@@ -772,24 +770,24 @@ def cal_busmrt_dist(df, default_dist=-1):
     train_heuristic = TransitHeuristic.TrainPredictor()
     bus_heuristic = TransitHeuristic.BusMapPredictor()
 
-    TIME_THRESHOLD = 10 * 60
+    time_threshold = 10 * 60
 
-    df['BUS_DIST'] = pd.Series([default_dist]*len(df))
-    df['METRO_DIST'] = pd.Series([default_dist]*len(df))
+    df['BUS_DIST'] = pd.Series([default_dist] * len(df))
+    df['METRO_DIST'] = pd.Series([default_dist] * len(df))
     for i in range(len(df)):
-        closeBus = []
-        closeMRT = []
+        close_bus = []
+        close_mrt = []
         if ~np.isnan(df['WLATITUDE'].iloc[i]) and ~np.isnan(df['WLONGITUDE'].iloc[i]):
-            closeBus = TransitHeuristic.find_nearest_station(df['WLATITUDE'].iloc[i], df['WLONGITUDE'].iloc[i], \
-                                                             bus_heuristic.bus_location_tree)
-            closeMRT = TransitHeuristic.find_nearest_station(df['WLATITUDE'].iloc[i], df['WLONGITUDE'].iloc[i], \
-                                                             train_heuristic.train_location_tree)
-        if len(closeBus) > 0:
-            dist2all = [Bus[1] for Bus in closeBus]
+            close_bus = TransitHeuristic.find_nearest_station(df['WLATITUDE'].iloc[i], df['WLONGITUDE'].iloc[i],
+                                                              bus_heuristic.bus_location_tree)
+            close_mrt = TransitHeuristic.find_nearest_station(df['WLATITUDE'].iloc[i], df['WLONGITUDE'].iloc[i],
+                                                              train_heuristic.train_location_tree)
+        if len(close_bus) > 0:
+            dist2all = [Bus[1] for Bus in close_bus]
             df.set_value(i, 'BUS_DIST', min(dist2all))
 
-        if len(closeMRT) > 0:
-            dist2all = [MRT[1] for MRT in closeMRT]
+        if len(close_mrt) > 0:
+            dist2all = [MRT[1] for MRT in close_mrt]
             df.set_value(i, 'METRO_DIST', min(dist2all))
 
     df['STOP_10MIN'] = pd.Series([0] * len(df))
@@ -802,9 +800,9 @@ def cal_busmrt_dist(df, default_dist=-1):
     cur_count_busstop_stop = 0
     all_delta_time = 0
 
-    if df.iloc[0]['VELOCITY'] < BUS_VELOCITY_THRESHOLD:
+    if df.iloc[0]['VELOCITY'] < params.BUS_VELOCITY_THRESHOLD:
         vel_bool.append(1)
-        if df.iloc[0]['BUS_DIST'] < NEAR_BUS_STOP_THRESHOLD:
+        if df.iloc[0]['BUS_DIST'] < params.NEAR_BUS_STOP_THRESHOLD:
             vel_bus_dist_bool.append(1)
         else:
             vel_bus_dist_bool.append(0)
@@ -817,9 +815,9 @@ def cal_busmrt_dist(df, default_dist=-1):
 
     for i in range(1, len(df)):
 
-        if df.iloc[i]['VELOCITY'] < BUS_VELOCITY_THRESHOLD:
+        if df.iloc[i]['VELOCITY'] < params.BUS_VELOCITY_THRESHOLD:
             vel_bool.append(1)
-            if df.iloc[i]['BUS_DIST'] < NEAR_BUS_STOP_THRESHOLD:
+            if df.iloc[i]['BUS_DIST'] < params.NEAR_BUS_STOP_THRESHOLD:
                 vel_bus_dist_bool.append(1)
             else:
                 vel_bus_dist_bool.append(0)
@@ -831,14 +829,14 @@ def cal_busmrt_dist(df, default_dist=-1):
         cur_count_busstop_stop += vel_bus_dist_bool[i]
 
         all_delta_time += df.iloc[i]['TIME_DELTA']
-        while all_delta_time > TIME_THRESHOLD:
+        while all_delta_time > time_threshold:
             # if cur_start_idx > 1:
             all_delta_time -= df.iloc[cur_start_idx]['TIME_DELTA']
-            cur_count_stop -= vel_bool[cur_start_idx-1]
-            cur_count_busstop_stop -= vel_bus_dist_bool[cur_start_idx-1]
+            cur_count_stop -= vel_bool[cur_start_idx - 1]
+            cur_count_busstop_stop -= vel_bus_dist_bool[cur_start_idx - 1]
             cur_start_idx += 1
 
-        df.set_value(i, 'STD_VELOCITY_10MIN', np.nanstd(df.iloc[cur_start_idx-1:i+1]['VELOCITY'].tolist()))
+        df.set_value(i, 'STD_VELOCITY_10MIN', np.nanstd(df.iloc[cur_start_idx - 1:i + 1]['VELOCITY'].tolist()))
         df.set_value(i, 'STOP_10MIN', cur_count_stop)
         df.set_value(i, 'STOP_BUSSTOP_10MIN', cur_count_busstop_stop)
 

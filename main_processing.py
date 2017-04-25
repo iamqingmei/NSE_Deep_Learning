@@ -1,117 +1,393 @@
-import numpy as np
-np.random.seed(0)
-import preprocessing
-import train_dl_models
-import datetime
+from main import *
 import evaluation
-import logging
-import sys
-
-FORMAT = '%(asctime)-15s %(message)s'
-logging.basicConfig(format=FORMAT, level=logging.INFO, stream=sys.stdout)
-
-opt = {'label_type': 'last_based_win_label',
-       'test_select_type': 'window',
-       'test_ratio': float(1/3),
-       'remark': 'random seed is 0',
-       'folder_name': './evaluation_report/' + str(datetime.datetime.now().strftime("%y-%m-%d %H:%M")) + '/',
-       'get_win_df_from_csv:': True}
-
-train_opt = {'batch_size': 32, 'epochs': 200, 'DLNetwork': 'FULL', 'l2': 0.00001}
-
-features = {'ALL_FEATURES': ['MOV_AVE_VELOCITY', 'STDACC', 'MEANMAG', 'MAXGYR', 'METRO_DIST', 'BUS_DIST', 'NUM_AP',
-                             'STD_VELOCITY_10MIN', 'STOP_BUSSTOP_10MIN','TIME_DELTA', 'VELOCITY', 'WLATITUDE',
-                             'WLONGITUDE'],
-            'VEHICLE_OR_NOT_FEATURES': ['TIME_DELTA', 'NUM_AP', 'STDACC', 'MEANMAG', 'MAXGYR', 'VELOCITY'],
-            'VEHICLE_TYPE': ['TIME_DELTA', 'NUM_AP', 'STDACC', 'MEANMAG', 'MAXGYR', 'VELOCITY']}
+import train_models
+import preprocessing
+import numpy as np
 
 
-def main():
-    if opt['get_win_df_from_csv:']:
-        logging.info("Fetch win_df directly from csv")
-        app_win_df, manual_win_df = preprocessing.get_win_df_from_csv()
-    else:
-        logging.info("Creating All App Trips")
-        app_pt_trip_list = preprocessing.get_app_trip_df_list(features['ALL_FEATURES'])
-
-        logging.info("Generating the window dataframes from all app trips")
-        app_win_df = preprocessing.get_win_df(app_pt_trip_list, features['ALL_FEATURES'])
-        for x in app_pt_trip_list:
-            x.save_trip_object()
-            del x
-
-        logging.info("Creating All Manual Trips")
-        manual_pt_trip_list = preprocessing.get_manual_trip_df_list(features['ALL_FEATURES'])
-
-        logging.info("Generating the window dataframe from manual app trips")
-        manual_win_df = preprocessing.get_win_df(manual_pt_trip_list, features['ALL_FEATURES'])
-
-        for x in manual_pt_trip_list:
-            x.save_trip_object()
-            del x
-        app_win_df.to_csv('./data/app/app_win_df.csv')
-        manual_win_df.to_csv('./data/manual/manual_win_df.csv')
-
-    # logging.info("Generating app_train_win_df, app_test_win_df")
-    # app_train_win_df, app_test_win_df = \
-    #     preprocessing.random_test_train(opt['test_select_type'], app_win_df, opt['test_ratio'], opt['label_type'])
-    logging.info("Generating manual_train_win_df, manual_test_win_df")
-    manual_train_win_df, manual_test_win_df = \
-        preprocessing.random_test_train(opt['test_select_type'], manual_win_df, opt['test_ratio'], opt['label_type'])
-
-    evaluation.init_write(opt, train_opt, features, manual_win_df, app_win_df)
+def dl_train_test():
+    evaluation.init_write(opt, [vehicle_or_not_train_opt, vehicle_type_train_opt, train_test_opt],
+                          [features['VEHICLE_OR_NOT_FEATURES'], features['VEHICLE_TYPE']],
+                          train_df, test_df)
+    print(evaluation.evaluation_report.write)
     # ~~~~~~~~~~~~~~ train vehicle/Non-vehicle model ~~~~~~~~~~~~~~~~
-    vehicle_or_not_train_win_df = manual_train_win_df.copy()
-    vehicle_or_not_test_win_df = manual_test_win_df.copy()
+    if vehicle_or_not_train_opt['random_seed'] is not None:
+        np.random.seed(vehicle_or_not_train_opt['random_seed'])
+    vehicle_or_not_train_win_df = train_df.copy()
+    vehicle_or_not_test_win_df = test_df.copy()
+
     vehicle_or_not_index = preprocessing.get_feature_idx(features['VEHICLE_OR_NOT_FEATURES'], features['ALL_FEATURES'])
     preprocessing.reassign_label(vehicle_or_not_train_win_df, vehicle_or_not_test_win_df,
-                                 [[1, 0], [2, 1], [3, 1], [4, 1], [5, 0]], opt['label_type'])
+                                 [[1, 0], [2, 1], [3, 1], [4, 1], [5, 0]])
     logging.info("Start to train vehicle_or_not model")
-    vehicle_or_not_model = train_dl_models.train_model(vehicle_or_not_train_win_df.iloc[:, vehicle_or_not_index],
-                                                       vehicle_or_not_train_win_df[opt['label_type']], train_opt)
+    features_test, labels_test = preprocessing.balance_dataset(
+        vehicle_or_not_test_win_df.iloc[:, vehicle_or_not_index],
+        vehicle_or_not_test_win_df[opt['test_label_type']])
+    vehicle_or_not_model = train_models.train_dl_veh_or_not_model(
+        vehicle_or_not_train_win_df.iloc[:, vehicle_or_not_index],
+        vehicle_or_not_train_win_df[opt['train_label_type']],
+        vehicle_or_not_train_opt,
+        features_test,
+        labels_test)
     logging.info("Start to test vehicle_or_not model")
-    vehicle_or_not_result_label = evaluation.evaluate_single_model(
+    evaluation.evaluate_single_model(
         vehicle_or_not_model, opt['folder_name'], 'vehicle_or_not',
         np.array(vehicle_or_not_test_win_df.iloc[:, vehicle_or_not_index]),
-        np.array(vehicle_or_not_test_win_df[opt['label_type']]))
+        np.array(vehicle_or_not_test_win_df[opt['test_label_type']]), save_model=False)
+
     # ~~~~~~~~~~~~~~~~ train vehicle_type_model ~~~~~~~~~~~~~~~~
-    vehicle_type_train_win_df = manual_train_win_df.copy()
-    vehicle_type_test_win_df = manual_test_win_df.copy()
+    if vehicle_type_train_opt['random_seed'] is not None:
+        np.random.seed(vehicle_type_train_opt['random_seed'])
+    vehicle_type_train_win_df = train_df.copy()
+    vehicle_type_test_win_df = test_df.copy()
+
     vehicle_type_index = preprocessing.get_feature_idx(features['VEHICLE_TYPE'], features['ALL_FEATURES'])
 
-    vehicle_type_test_win_df = vehicle_type_test_win_df[(vehicle_type_test_win_df[opt['label_type']] == 4)
-                                                        | (vehicle_type_test_win_df[opt['label_type']] == 3) | (
-                                                        vehicle_type_test_win_df[opt['label_type']] == 2)]
+    vehicle_type_test_win_df = vehicle_type_test_win_df[(vehicle_type_test_win_df[opt['test_label_type']] == 4)
+                                                        | (vehicle_type_test_win_df[opt['test_label_type']] == 3) | (
+                                                        vehicle_type_test_win_df[opt['test_label_type']] == 2)]
 
-    vehicle_type_train_win_df = vehicle_type_train_win_df[(vehicle_type_train_win_df[opt['label_type']] == 2)
-                                                          | (vehicle_type_train_win_df[opt['label_type']] == 3)
-                                                          | (vehicle_type_train_win_df[opt['label_type']] == 4)]
+    vehicle_type_train_win_df = vehicle_type_train_win_df[(vehicle_type_train_win_df[opt['train_label_type']] == 2)
+                                                          | (vehicle_type_train_win_df[opt['train_label_type']] == 3)
+                                                          | (vehicle_type_train_win_df[opt['train_label_type']] == 4)]
 
     preprocessing.reassign_label(vehicle_type_train_win_df, vehicle_type_test_win_df,
-                                 [[2, 0], [3, 1], [4, 2]], opt['label_type'])
+                                 [[2, 0], [3, 1], [4, 2]])
+    features_test, labels_test = preprocessing.balance_dataset(
+        vehicle_type_test_win_df.iloc[:, vehicle_type_index],
+        vehicle_type_test_win_df[opt['test_label_type']])
     logging.info("Start to train vehicle_type model")
-    vehicle_type_model = train_dl_models.train_model(vehicle_type_train_win_df.iloc[:, vehicle_type_index],
-                                                     vehicle_type_train_win_df[opt['label_type']],
-                                                     train_opt)
+    vehicle_type_model = train_models.train_dl_veh_type_model(
+        vehicle_type_train_win_df.iloc[:, vehicle_type_index],
+        vehicle_type_train_win_df[opt['train_label_type']],
+        vehicle_type_train_opt,
+        features_test,
+        labels_test)
+
     logging.info("Start to test vehicle_type model")
-    vehicle_type_result_label = evaluation.evaluate_single_model(
-        vehicle_type_model, opt['folder_name'], 'vehicle_type',
-        np.array(vehicle_type_test_win_df.iloc[:, vehicle_type_index]),
-        np.array(vehicle_type_test_win_df[opt['label_type']]))
+    if vehicle_type_train_opt['middle_output'] is True:
+        evaluation.evaluate_single_ml_model(
+            vehicle_type_model,
+            np.array(vehicle_type_test_win_df.iloc[:, vehicle_type_index]),
+            np.array(vehicle_type_test_win_df[opt['test_label_type']]),
+            ['mrt', 'bus', 'car'], opt['folder_name'])
+    else:
+        evaluation.evaluate_single_model(
+            vehicle_type_model,
+            opt['folder_name'],
+            'vehicle_type',
+            np.array(vehicle_type_test_win_df.iloc[:, vehicle_type_index]),
+            np.array(vehicle_type_test_win_df[opt['test_label_type']]),
+            save_model=False)
+    print(evaluation.evaluation_report.write)
+
     # ~~~~~~~~~~~~~~~~~ get overall result ~~~~~~~~~~~~~~~~~~~
-    overall_result_label = evaluation.evaluate_overall_manual_2(vehicle_or_not_model, vehicle_type_model,
-                                                                np.array(manual_test_win_df),
-                                                                np.array(manual_test_win_df[opt['label_type']]),
-                                                                vehicle_or_not_index,
-                                                                vehicle_type_index)
+    overall_test_win_df = test_df.copy()
+    overall_result_label = evaluation.evaluate_overall_manual_2(
+        vehicle_or_not_model, vehicle_type_model, overall_test_win_df,
+        overall_test_win_df[opt['test_label_type']], vehicle_or_not_index,
+        vehicle_type_index, opt['smooth_overall_result'])
     # ~~~~~~~~~~~~~~~~~ Save predicted result into csv for visualization ~~~~~~~~~~
-    evaluation.save_predicted_result_in_csv(vehicle_or_not_result_label, vehicle_or_not_test_win_df, opt['folder_name'],
-                                            features['ALL_FEATURES'], 'vehicle_or_not', opt['label_type'])
-    evaluation.save_predicted_result_in_csv(vehicle_type_result_label, vehicle_type_test_win_df, opt['folder_name'],
-                                            features['ALL_FEATURES'], 'vehicle_type', opt['label_type'])
-    evaluation.save_predicted_result_in_csv(overall_result_label, manual_test_win_df, opt['folder_name'],
-                                            features['ALL_FEATURES'], 'overall', opt['label_type'])
+    evaluation.save_predicted_result_in_csv(overall_result_label, overall_test_win_df, opt['folder_name'],
+                                            'overall', opt['test_label_type'])
     evaluation.save_write(opt['folder_name'])
 
-if __name__ == '__main__':
-    main()
+    del overall_test_win_df, vehicle_or_not_test_win_df, vehicle_or_not_train_win_df, vehicle_or_not_index, \
+        vehicle_type_model, vehicle_type_train_win_df, vehicle_type_test_win_df, \
+        vehicle_type_index
+
+
+def ml_train_test(ml_opt):
+    evaluation.init_write(opt, None, [features['VEHICLE_OR_NOT_FEATURES'], features['VEHICLE_TYPE']],
+                          train_df, test_df)
+
+    # ~~~~~~~~~~~~~~ train vehicle/Non-vehicle model ~~~~~~~~~~~~~~~~
+    vehicle_or_not_train_win_df = train_df.copy()
+    vehicle_or_not_test_win_df = test_df.copy()
+
+    vehicle_or_not_index = preprocessing.get_feature_idx(features['VEHICLE_OR_NOT_FEATURES'], features['ALL_FEATURES'])
+    preprocessing.reassign_label(vehicle_or_not_train_win_df, vehicle_or_not_test_win_df,
+                                 [[1, 0], [2, 1], [3, 1], [4, 1], [5, 0]])
+    logging.info("Start to train vehicle_or_not model")
+    vehicle_or_not_model = train_models.train_ml_model(
+        np.array(vehicle_or_not_train_win_df.iloc[:, vehicle_or_not_index]),
+        np.array(vehicle_or_not_train_win_df[opt['train_label_type']]),
+        ml_opt)
+
+    logging.info("Start to evaluate vehicle_or_not model")
+    evaluation.evaluate_single_ml_model(
+        vehicle_or_not_model,
+        np.array(vehicle_or_not_test_win_df.iloc[:, vehicle_or_not_index]),
+        np.array(vehicle_or_not_test_win_df[opt['test_label_type']]),
+        ['not vehicle', 'vehicle'],
+        opt['folder_name'])
+
+    # ~~~~~~~~~~~~~~~~ train vehicle_type_model ~~~~~~~~~~~~~~~~
+    vehicle_type_train_win_df = train_df.copy()
+    vehicle_type_test_win_df = test_df.copy()
+
+    vehicle_type_index = preprocessing.get_feature_idx(features['VEHICLE_TYPE'], features['ALL_FEATURES'])
+    vehicle_type_test_win_df = vehicle_type_test_win_df[(vehicle_type_test_win_df[opt['test_label_type']] == 4)
+                                                        | (vehicle_type_test_win_df[opt['test_label_type']] == 3) | (
+                                                            vehicle_type_test_win_df[opt['test_label_type']] == 2)]
+
+    vehicle_type_train_win_df = vehicle_type_train_win_df[(vehicle_type_train_win_df[opt['train_label_type']] == 2)
+                                                          | (vehicle_type_train_win_df[opt['train_label_type']] == 3)
+                                                          | (vehicle_type_train_win_df[opt['train_label_type']] == 4)]
+
+    preprocessing.reassign_label(vehicle_type_train_win_df, vehicle_type_test_win_df,
+                                 [[2, 0], [3, 1], [4, 2]])
+    logging.info("Start to train vehicle_type model")
+    vehicle_type_model = train_models.train_ml_model(
+        np.array(vehicle_type_train_win_df.iloc[:, vehicle_type_index]),
+        np.array(vehicle_type_train_win_df[opt['train_label_type']]),
+        ml_opt)
+    logging.info("Start to evaluate vehicle_type model")
+    evaluation.evaluate_single_ml_model(
+        vehicle_type_model,
+        np.array(vehicle_type_test_win_df.iloc[:, vehicle_type_index]),
+        np.array(vehicle_type_test_win_df[opt['test_label_type']]),
+        ['mrt', 'bus', 'car'],
+        opt['folder_name'])
+
+    # ~~~~~~~~~~~~~~~~~ get overall result ~~~~~~~~~~~~~~~~~~~
+    overall_test_win_df = test_df.copy()
+    overall_result_label = evaluation.evaluate_overall_manual_2(vehicle_or_not_model, vehicle_type_model,
+                                                                overall_test_win_df,
+                                                                overall_test_win_df[opt['test_label_type']],
+                                                                vehicle_or_not_index,
+                                                                vehicle_type_index, opt['smooth_overall_result'])
+    # ~~~~~~~~~~~~~~~~~ Save predicted result into csv for visualization ~~~~~~~~~~
+    evaluation.save_predicted_result_in_csv(overall_result_label, overall_test_win_df, opt['folder_name'],
+                                            'overall', opt['test_label_type'])
+    evaluation.save_write(opt['folder_name'])
+    # print(evaluation.evaluation_report.write)
+
+
+def dl_train_test_3binary():
+    evaluation.init_write(opt, [vehicle_or_not_train_opt, vehicle_type_train_opt, bus_or_not_train_opt,
+                                mrt_or_car_train_opt, train_test_opt],
+                          [features['VEHICLE_OR_NOT_FEATURES'], features['BUS_OR_NOT'], features['MRT_OR_CAR']],
+                          train_df, test_df)
+
+    # # ~~~~~~~~~~~~~~ train vehicle/Non-vehicle model ~~~~~~~~~~~~~~~~
+    if vehicle_or_not_train_opt['random_seed'] is not None:
+        np.random.seed(vehicle_or_not_train_opt['random_seed'])
+    vehicle_or_not_train_win_df = train_df.copy()
+    vehicle_or_not_test_win_df = test_df.copy()
+
+    vehicle_or_not_index = preprocessing.get_feature_idx(features['VEHICLE_OR_NOT_FEATURES'], features['ALL_FEATURES'])
+    preprocessing.reassign_label(vehicle_or_not_train_win_df, vehicle_or_not_test_win_df,
+                                 [[1, 0], [2, 1], [3, 1], [4, 1], [5, 0]])
+    logging.info("Start to train vehicle_or_not model")
+    features_test, labels_test = preprocessing.balance_dataset(
+        vehicle_or_not_test_win_df.iloc[:, vehicle_or_not_index],
+        vehicle_or_not_test_win_df[opt['test_label_type']])
+    vehicle_or_not_model = train_models.train_dl_veh_or_not_model(
+        vehicle_or_not_train_win_df.iloc[:, vehicle_or_not_index],
+        vehicle_or_not_train_win_df[opt['train_label_type']],
+        vehicle_or_not_train_opt,
+        features_test,
+        labels_test)
+    logging.info("Start to test vehicle_or_not model")
+    evaluation.evaluate_single_model(
+        vehicle_or_not_model, opt['folder_name'], 'vehicle_or_not',
+        np.array(vehicle_or_not_test_win_df.iloc[:, vehicle_or_not_index]),
+        np.array(vehicle_or_not_test_win_df[opt['test_label_type']]), save_model=False)
+
+    # ~~~~~~~~~~~~~~~~ train bus_or_not_model ~~~~~~~~~~~~~~~~~~
+    if bus_or_not_train_opt['random_seed'] is not None:
+        np.random.seed(bus_or_not_train_opt['random_seed'])
+
+    bus_or_not_train_win_df = train_df.copy()
+    bus_or_not_test_win_df = test_df.copy()
+
+    bus_or_not_index = preprocessing.get_feature_idx(features['BUS_OR_NOT'], features['ALL_FEATURES'])
+
+    bus_or_not_test_win_df = bus_or_not_test_win_df[(bus_or_not_test_win_df[opt['test_label_type']] == 4) |
+                                                    (bus_or_not_test_win_df[opt['test_label_type']] == 3) |
+                                                    (bus_or_not_test_win_df[opt['test_label_type']] == 2)]
+
+    bus_or_not_train_win_df = bus_or_not_train_win_df[(bus_or_not_train_win_df[opt['train_label_type']] == 2)
+                                                      | (bus_or_not_train_win_df[opt['train_label_type']] == 3)
+                                                      | (bus_or_not_train_win_df[opt['train_label_type']] == 4)]
+
+    preprocessing.reassign_label(bus_or_not_train_win_df, bus_or_not_test_win_df,
+                                 [[2, 0], [3, 1], [4, 0]])
+    logging.info("Start to train bus_or_not model")
+    features_test, labels_test = preprocessing.balance_dataset(
+        bus_or_not_test_win_df.iloc[:, bus_or_not_index],
+        bus_or_not_test_win_df[opt['test_label_type']])
+    bus_or_not_model = train_models.train_dl_veh_type_model(
+        bus_or_not_train_win_df.iloc[:, bus_or_not_index],
+        bus_or_not_train_win_df[opt['train_label_type']],
+        bus_or_not_train_opt,
+        features_test,
+        labels_test)
+
+    logging.info("Start to test bus_or_not model")
+
+    evaluation.evaluate_single_model(
+        bus_or_not_model, opt['folder_name'], 'bus_or_not',
+        np.array(bus_or_not_test_win_df.iloc[:, bus_or_not_index]),
+        np.array(bus_or_not_test_win_df[opt['test_label_type']]), save_model=False)
+
+    # ~~~~~~~~~~~~~~~~ train mrt_or_car_model ~~~~~~~~~~~~~~~~
+    if mrt_or_car_train_opt['random_seed'] is not None:
+        np.random.seed(mrt_or_car_train_opt['random_seed'])
+
+    mrt_or_car_train_win_df = train_df.copy()
+    mrt_or_car_test_win_df = test_df.copy()
+
+    mrt_or_car_index = preprocessing.get_feature_idx(features['VEHICLE_TYPE'], features['ALL_FEATURES'])
+
+    mrt_or_car_test_win_df = mrt_or_car_test_win_df[(mrt_or_car_test_win_df[opt['test_label_type']] == 4) |
+                                                    (mrt_or_car_test_win_df[opt['test_label_type']] == 2)]
+
+    mrt_or_car_train_win_df = mrt_or_car_train_win_df[(mrt_or_car_train_win_df[opt['train_label_type']] == 2) |
+                                                      (mrt_or_car_train_win_df[opt['train_label_type']] == 4)]
+
+    preprocessing.reassign_label(mrt_or_car_train_win_df, mrt_or_car_test_win_df,
+                                 [[2, 0], [4, 1]])
+    logging.info("Start to train mrt_or_car model")
+    features_test, labels_test = preprocessing.balance_dataset(
+        mrt_or_car_test_win_df.iloc[:, mrt_or_car_index],
+        mrt_or_car_test_win_df[opt['test_label_type']])
+    mrt_or_car_model = train_models.train_dl_veh_type_model(
+        mrt_or_car_train_win_df.iloc[:, mrt_or_car_index],
+        mrt_or_car_train_win_df[opt['train_label_type']],
+        mrt_or_car_train_opt,
+        features_test,
+        labels_test)
+
+    logging.info("Start to test mrt_or_car model")
+    evaluation.evaluate_single_model(
+        mrt_or_car_model, opt['folder_name'], 'mrt_or_car',
+        np.array(mrt_or_car_test_win_df.iloc[:, mrt_or_car_index]),
+        np.array(mrt_or_car_test_win_df[opt['test_label_type']]), save_model=False)
+
+    # ~~~~~~~~~~~~~~~~~ get overall result ~~~~~~~~~~~~~~~~~~~
+    overall_test_win_df = test_df.copy()
+    overall_result_label = evaluation.evaluate_overall_bibibinary(
+        vehicle_or_not_model, bus_or_not_model, mrt_or_car_model, overall_test_win_df,
+        overall_test_win_df[opt['test_label_type']],
+        vehicle_or_not_index, bus_or_not_index, mrt_or_car_index,
+        opt['smooth_overall_result'])
+    # # ~~~~~~~~~~~~~~~~~ Save predicted result into csv for visualization ~~~~~~~~~~
+    evaluation.save_predicted_result_in_csv(overall_result_label, overall_test_win_df, opt['folder_name'],
+                                            'overall', opt['test_label_type'])
+    evaluation.save_write(opt['folder_name'])
+
+
+def dl_one_model_train_test():
+    evaluation.init_write(opt, [one_model_train_opt, train_test_opt], features['ONE_MODEL'],
+                          train_df, test_df)
+
+    # # ~~~~~~~~~~~~~~ train one_model model ~~~~~~~~~~~~~~~~
+    if one_model_train_opt['random_seed'] is not None:
+        np.random.seed(one_model_train_opt['random_seed'])
+    one_model_train_win_df = train_df.copy()
+    one_model_test_win_df = test_df.copy()
+
+    one_model_index = preprocessing.get_feature_idx(features['ONE_MODEL'], features['ALL_FEATURES'])
+    preprocessing.reassign_label(one_model_train_win_df, one_model_test_win_df,
+                                 [[1, 0], [2, 1], [3, 2], [4, 3], [5, 0]])
+    logging.info("Start to train one_model model")
+    one_model_model = train_models.train_dl_veh_type_model(
+        one_model_train_win_df.iloc[:, one_model_index],
+        one_model_train_win_df[opt['train_label_type']],
+        one_model_train_opt)
+    logging.info("Start to test one_model model")
+    if one_model_train_opt['DLNetwork'] == 'LSTM':
+        features_test = np.reshape(np.array(one_model_test_win_df.iloc[:, one_model_index]),
+                                   (len(one_model_test_win_df.iloc[:, one_model_index]),
+                                    6,
+                                    len(features['ONE_MODEL'])))
+        evaluation.evaluate_single_model(
+            one_model_model, opt['folder_name'], 'one_model',
+            features_test,
+            np.array(one_model_test_win_df[opt['test_label_type']]), save_model=False)
+    else:
+        evaluation.evaluate_single_model(
+            one_model_model, opt['folder_name'], 'one_model',
+            np.array(one_model_test_win_df.iloc[:, one_model_index]),
+            np.array(one_model_test_win_df[opt['test_label_type']]), save_model=False)
+
+    evaluation.save_write(opt['folder_name'])
+
+
+def lstm_train_test():
+    evaluation.init_write(opt, [vehicle_or_not_train_opt, vehicle_type_train_opt, train_test_opt],
+                          [features['VEHICLE_OR_NOT_FEATURES'], features['VEHICLE_TYPE']],
+                          train_df, test_df)
+    print(evaluation.evaluation_report.write)
+    # # ~~~~~~~~~~~~~~ train vehicle/Non-vehicle model ~~~~~~~~~~~~~~~~
+    if vehicle_or_not_train_opt['random_seed'] is not None:
+        np.random.seed(vehicle_or_not_train_opt['random_seed'])
+    vehicle_or_not_train_win_df = train_df.copy()
+    vehicle_or_not_test_win_df = test_df.copy()
+
+    vehicle_or_not_index = preprocessing.get_feature_idx(features['VEHICLE_OR_NOT_FEATURES'], features['ALL_FEATURES'])
+    preprocessing.reassign_label(vehicle_or_not_train_win_df, vehicle_or_not_test_win_df,
+                                 [[1, 0], [2, 1], [3, 1], [4, 1], [5, 0]])
+    logging.info("Start to train vehicle_or_not model")
+    vehicle_or_not_model = train_models.train_lstm_model(vehicle_or_not_train_win_df.iloc[:, vehicle_or_not_index],
+                                                         vehicle_or_not_train_win_df[opt['train_label_type']],
+                                                         vehicle_or_not_train_opt)
+    logging.info("Start to test vehicle_or_not model")
+    features_test = np.reshape(np.array(vehicle_or_not_test_win_df.iloc[:, vehicle_or_not_index]),
+                               (len(vehicle_or_not_test_win_df.iloc[:, vehicle_or_not_index]),
+                                6,
+                                len(features['VEHICLE_OR_NOT_FEATURES'])))
+    evaluation.evaluate_single_model(
+        vehicle_or_not_model, opt['folder_name'], 'vehicle_or_not',
+        features_test,
+        np.array(vehicle_or_not_test_win_df[opt['test_label_type']]), save_model=False)
+
+    # ~~~~~~~~~~~~~~~~ train vehicle_type_model ~~~~~~~~~~~~~~~~
+    if vehicle_type_train_opt['random_seed'] is not None:
+        np.random.seed(vehicle_type_train_opt['random_seed'])
+    vehicle_type_train_win_df = train_df.copy()
+    vehicle_type_test_win_df = test_df.copy()
+
+    vehicle_type_index = preprocessing.get_feature_idx(features['VEHICLE_TYPE'], features['ALL_FEATURES'])
+
+    vehicle_type_test_win_df = vehicle_type_test_win_df[(vehicle_type_test_win_df[opt['test_label_type']] == 4)
+                                                        | (vehicle_type_test_win_df[opt['test_label_type']] == 3) | (
+                                                        vehicle_type_test_win_df[opt['test_label_type']] == 2)]
+
+    vehicle_type_train_win_df = vehicle_type_train_win_df[(vehicle_type_train_win_df[opt['train_label_type']] == 2)
+                                                          | (vehicle_type_train_win_df[opt['train_label_type']] == 3)
+                                                          | (vehicle_type_train_win_df[opt['train_label_type']] == 4)]
+
+    preprocessing.reassign_label(vehicle_type_train_win_df, vehicle_type_test_win_df,
+                                 [[2, 0], [3, 1], [4, 2]])
+    logging.info("Start to train vehicle_type model")
+    vehicle_type_model = train_models.train_lstm_model(vehicle_type_train_win_df.iloc[:, vehicle_type_index],
+                                                       vehicle_type_train_win_df[opt['train_label_type']],
+                                                       vehicle_type_train_opt)
+
+    logging.info("Start to test vehicle_type model")
+    features_test = np.reshape(np.array(vehicle_type_test_win_df.iloc[:, vehicle_type_index]),
+                               (len(vehicle_type_test_win_df.iloc[:, vehicle_type_index]),
+                                6,
+                                len(features['VEHICLE_TYPE'])))
+    evaluation.evaluate_single_model(
+        vehicle_type_model, opt['folder_name'], 'vehicle_type',
+        features_test,
+        np.array(vehicle_type_test_win_df[opt['test_label_type']]), save_model=False)
+
+    # ~~~~~~~~~~~~~~~~~ get overall result ~~~~~~~~~~~~~~~~~~~
+    overall_test_win_df = test_df.copy()
+    overall_result_label = evaluation.evaluate_overall_lstm(
+        vehicle_or_not_model, vehicle_type_model, overall_test_win_df,
+        overall_test_win_df[opt['test_label_type']], vehicle_or_not_index,
+        vehicle_type_index, opt['smooth_overall_result'])
+    # ~~~~~~~~~~~~~~~~~ Save predicted result into csv for visualization ~~~~~~~~~~
+    evaluation.save_predicted_result_in_csv(overall_result_label, overall_test_win_df, opt['folder_name'],
+                                            'overall', opt['test_label_type'])
+    evaluation.save_write(opt['folder_name'])
+
+    del overall_test_win_df, vehicle_or_not_test_win_df, vehicle_or_not_train_win_df, vehicle_or_not_index, \
+        vehicle_type_model, vehicle_or_not_model, vehicle_type_train_win_df, vehicle_type_test_win_df, \
+        vehicle_type_index

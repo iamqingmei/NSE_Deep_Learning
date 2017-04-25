@@ -11,8 +11,8 @@ import logging
 import numpy as np
 import os
 
-from predict_mode import AbstractPredictor, getStartEndIdx
-from predict_mode import MODE_STOP_OUT, MODE_STOP_IN, MODE_WALK_OUT, MODE_WALK_IN, MODE_TRAIN, MODE_BUS, MODE_CAR, MODE_TBD
+from .predict_mode import AbstractPredictor, getStartEndIdx
+from .predict_mode import MODE_TRAIN, MODE_BUS, MODE_CAR
 from util import great_circle_dist, chunks
 
 
