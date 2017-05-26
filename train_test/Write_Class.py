@@ -36,7 +36,7 @@ class Write:
         :param folder_name: The folder_name to save txt file
         :return: None
         """
-        file_name = 'report_' + str(datetime.datetime.now().strftime("%m-%d %H:%M")) + 'acc' + \
+        file_name = 'report_' + str(datetime.datetime.now().strftime("%m-%d %H:%M:%S")) + 'acc' + \
                     '_%0.2f' * len(self.accuracies) % tuple(self.accuracies) + '.txt'
         with open(folder_name + file_name, 'w') as f:
             f.truncate()

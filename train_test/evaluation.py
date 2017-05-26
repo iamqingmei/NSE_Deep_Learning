@@ -1,20 +1,21 @@
 import datetime
-import numpy as np
-from keras.utils.vis_utils import plot_model
-from keras.utils import np_utils
-from sklearn.metrics import confusion_matrix, classification_report, accuracy_score
-# import xgboost as xgb
-from util import chunks
-from collections import Counter
 import os
-import pandas as pd
-from Write_Class import Write
+from collections import Counter
 
+import numpy as np
+import pandas as pd
+from keras.utils import np_utils
+from keras.utils.vis_utils import plot_model
+from sklearn.metrics import confusion_matrix, classification_report, accuracy_score
+
+from train_test.Write_Class import Write
+from utils.util import chunks
 
 evaluation_report = Write('')
 
 
-def evaluate_single_model(model, folder_name, model_name, features_test, labels_test, save_model=True):
+def evaluate_single_model(model, folder_name, model_name, features_test, labels_test, save_model=True,
+                          num_classes=None):
     """
     Evaluate and Test a single model
     :param model: The model to be tested
@@ -25,7 +26,7 @@ def evaluate_single_model(model, folder_name, model_name, features_test, labels_
     :param save_model: boolean, whether to save the model to disk
     :return: predicted labels of the tesing dataset
     """
-    cat_labels_test = np_utils.to_categorical(labels_test)
+    cat_labels_test = np_utils.to_categorical(labels_test, num_classes)
     loss, acc = model.evaluate(features_test, cat_labels_test, verbose=2)
     write = "**********Evaluating " + str(model_name) + "************\n"
     write += 'Testing data size: ' + str(len(labels_test)) + '\n'

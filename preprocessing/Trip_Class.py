@@ -61,14 +61,26 @@ class Trip:
             cur_all_based_win_label = get_all_based_win_label(self.trip_df.iloc[idx - params.window_size + 1:idx + 1]
                                                               ['pt_label'])
             cur_last_based_win_label = self.trip_df.iloc[idx]['pt_label']
-            cur_win_localization_rate = np.count_nonzero(~np.isnan(self.trip_df
-                                                                   .iloc[idx - params.window_size + 1:idx + 1]
-                                                                   ['WLONGITUDE']))/params.window_size
+            cur_win_localization_count = np.count_nonzero(~np.isnan(self.trip_df
+                                                                    .iloc[idx - params.window_size + 1:idx + 1]
+                                                                    ['WLONGITUDE']))
             if (cur_all_based_win_label == 3) or (cur_last_based_win_label == 3):
-                if cur_win_localization_rate < params.min_bus_localization_rate:
+                if cur_win_localization_count < params.min_bus_localization_count:
                     continue
             elif (cur_all_based_win_label == 4) or (cur_last_based_win_label == 4):
-                if cur_win_localization_rate < params.min_car_localization_rate:
+                if cur_win_localization_count < params.min_car_localization_count:
+                    continue
+            elif (cur_all_based_win_label == 0) or (cur_last_based_win_label == 0):
+                if cur_win_localization_count < params.min_no_veh_localization_count:
+                    continue
+            elif (cur_all_based_win_label == 1) or (cur_last_based_win_label == 1):
+                if cur_win_localization_count < params.min_no_veh_localization_count:
+                    continue
+            elif (cur_all_based_win_label == 5) or (cur_last_based_win_label == 5):
+                if cur_win_localization_count < params.min_no_veh_localization_count:
+                    continue
+            elif (cur_all_based_win_label == 2) or (cur_last_based_win_label == 2):
+                if cur_win_localization_count < params.min_mrt_localization_count:
                     continue
 
             all_based_win_labels.append(cur_all_based_win_label)

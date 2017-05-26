@@ -5,15 +5,16 @@ a heuristic of proximity to bus or train stops and bus or train route.
 """
 
 import csv
-from rtree import index
-from collections import defaultdict
 import logging
-import numpy as np
 import os
+from collections import defaultdict
 
+import numpy as np
+from rtree import index
+
+from utils.util import great_circle_dist, chunks
 from .predict_mode import AbstractPredictor, getStartEndIdx
 from .predict_mode import MODE_TRAIN, MODE_BUS, MODE_CAR
-from util import great_circle_dist, chunks
 
 
 def build_busstop_map(bus_stop_location_file, bus_route_file):

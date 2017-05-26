@@ -1,12 +1,14 @@
-import pandas as pd
-import numpy as np
-import pickle
-import params
-from Trip_Class import Trip
-from normalization import normalize
-import os
 import logging
+import os
+import pickle
 from collections import Counter
+
+import numpy as np
+import pandas as pd
+
+import params
+from preprocessing.Trip_Class import Trip
+from preprocessing.normalization import normalize
 
 
 def get_app_trip_df_list(all_features):
@@ -123,16 +125,21 @@ def get_google_trip_df_list(all_features):
 def random_test_train(select_type, df, ratio):
     if select_type == 'trip':
         trip_keys = list(set(df['trip_id'].tolist()))
+        np.random.shuffle(trip_keys)
+        test_length = int(len(df) * ratio)
+        selected_length = 0
+        test_df = pd.DataFrame()
+        test_trip = []
+        while selected_length < test_length:
+            cur_trip = trip_keys.pop()
+            cur_trip_df = df[df.trip_id == cur_trip]
+            test_df = test_df.append(cur_trip_df)
+            test_trip.append(cur_trip)
+            selected_length += len(cur_trip_df)
 
-        test_trip_idx = np.random.choice(trip_keys, int(len(trip_keys) * ratio),
-                                         replace=False)
-        test_trip_idx = sorted(test_trip_idx)
-        train_trip_idx = [x for x in trip_keys if x not in test_trip_idx]
-        test_df = df[(df['trip_id'].isin(test_trip_idx))]
-        train_df = df[(df['trip_id'].isin(train_trip_idx))]
+        train_df = df[(df['trip_id'].isin(trip_keys))]
 
-        del trip_keys, test_trip_idx, train_trip_idx
-        return train_df, test_df
+        del trip_keys, test_trip
     elif select_type == 'window':
         test_idx = np.random.choice(len(df), int(len(df) * ratio), replace=False)
         train_idx = [x for x in range(len(df)) if x not in test_idx]
@@ -142,12 +149,21 @@ def random_test_train(select_type, df, ratio):
         del test_idx, train_idx
     elif select_type == 'nid':
         nid_list = list(set(df['nid'].tolist()))
-        test_nid_idx = np.random.choice(nid_list, int(len(nid_list) * ratio), replace=False)
-        train_nid_idx = [x for x in nid_list if x not in test_nid_idx]
-        test_df = df[(df['nid'].isin(test_nid_idx))]
-        train_df = df[(df['nid'].isin(train_nid_idx))]
+        np.random.shuffle(nid_list)
+        test_length = int(len(df) * ratio)
+        selected_length = 0
+        test_df = pd.DataFrame()
+        test_nid = []
+        while selected_length < test_length:
+            cur_nid = nid_list.pop()
+            cur_nid_df = df[df.nid == cur_nid]
+            test_df = test_df.append(cur_nid_df)
+            test_nid.append(cur_nid)
+            selected_length += len(cur_nid_df)
 
-        del nid_list, test_nid_idx, train_nid_idx
+        train_df = df[(df['nid'].isin(nid_list))]
+
+        del nid_list, test_nid
     else:
         print("Wrong random selection type! Please enter 'trip', 'nid' or 'window'")
         test_df = pd.DataFrame()
@@ -192,7 +208,7 @@ def get_win_df(pt_trip_list, all_features):
         #        [self.trip_id] * (self.trip_length - params.window_size + 1), \
         #        [self.nid] * (self.trip_length - params.window_size + 1), all_time_delta, all_lon, all_lat
         # f, l, a, t, nid, time_delta, lon, lat = trip.get_win_info_with_localization_rate(all_features)
-        f, l, a, t, nid, time_delta, lon, lat = trip.get_win_info_with_localization_rate(all_features)
+        f, l, a, t, nid, time_delta, lon, lat = trip.get_win_info(all_features)
         win_features += f
         all_based += a
         last_based += l
@@ -258,3 +274,5 @@ def balance_dataset(features_df, labels_df):
     print(labels_count_dict)
 
     return win_df.iloc[:, :-1], win_df['win_label']
+
+

@@ -319,3 +319,13 @@ def create_class_weight(labels_dict):
         class_weight[key] = score
 
     return class_weight
+
+
+def is_consecutive(list_of_numbers):
+    sorted_list = sorted(list_of_numbers)
+    prev = sorted_list[0]
+    for i in list_of_numbers[1:]:
+        if prev + 1 != i:
+            return False
+        prev = i
+    return True

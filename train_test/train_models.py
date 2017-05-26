@@ -1,22 +1,19 @@
 # import basic libraries
+from collections import Counter
+
 import numpy as np
-# import deep learning libraries
+from keras.callbacks import ReduceLROnPlateau
 from keras.layers import Input, Dense, Dropout
 from keras.layers.recurrent import LSTM
 from keras.models import Model
 from keras.regularizers import l2
 from keras.utils import np_utils
-# from keras.optimizers import Adagrad
-# from keras.callbacks import TensorBoard, ModelCheckpoint
-from keras.callbacks import ReduceLROnPlateau
-# import ml libraries
-from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
 from sklearn import svm
-# import utils
-from ML_clf_with_dl_Class import MlClfWithDl
-from util import create_class_weight
-from collections import Counter
+from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
+
 import params
+from train_test.ML_clf_with_dl_Class import MlClfWithDl
+from utils.util import create_class_weight
 
 
 def train_dl_veh_or_not_model(features_train, labels_train, train_opt, features_test=None, labels_test=None):
@@ -114,6 +111,9 @@ def train_dl_veh_type_model(features_train, labels_train, train_opt, features_te
     model.fit(features_train, np.array(cat_labels_train), verbose=2, epochs=train_opt['epochs'],
               batch_size=train_opt['batch_size'], class_weight=class_weight, callbacks=[reduce_lr],
               validation_data=(np.array(features_test), np.array(np.array(cat_labels_test))))
+    # model.fit(features_train, np.array(cat_labels_train), verbose=2, epochs=train_opt['epochs'],
+    #           batch_size=train_opt['batch_size'], class_weight=class_weight, callbacks=[reduce_lr],
+    #           validation_split=0.1)
     del inputs, layer1, layer2, layer4, drop1, layer5
     if train_opt['middle_output'] is True:
         middle_layers = Model(inputs=inputs, outputs=layer3)
@@ -150,11 +150,15 @@ def train_ml_model(features_train, labels_train, ml_opt):
     if ml_opt is 'rf':
         clf = RandomForestClassifier(n_estimators=100, class_weight=class_weight)
         # clf = RandomForestClassifier(n_estimators=30)
-    elif ml_opt is 'svm':
+    elif ml_opt is 'rbf':
         clf = svm.SVC(kernel='rbf', C=1, class_weight=class_weight)
-        # clf = svm.SVC(kernel='poly', C=1, class_weight=class_weight)
+    elif ml_opt is 'poly':
+        clf = svm.SVC(kernel='poly', C=1, class_weight=class_weight, degree=3)
+    elif ml_opt is 'sigmoid':
+        clf = svm.SVC(kernel='sigmoid', C=1, class_weight=class_weight)
     elif ml_opt is 'ada':
-        clf = AdaBoostClassifier(n_estimators=20)
+        clf = AdaBoostClassifier(base_estimator=RandomForestClassifier(n_estimators=100, class_weight=class_weight),
+                                 n_estimators=20)
     else:
         print("Wrong ml_opt!")
         quit()

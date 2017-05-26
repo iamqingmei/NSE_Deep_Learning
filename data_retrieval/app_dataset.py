@@ -5,7 +5,8 @@ import psycopg2
 import params
 import pandas as pd
 from .dbConnPSQL import getLabelledDataAll, getMainDataPSQL2016, getTripDataPSQL2016
-from .feature_calc import calc_extra_features, calc_geo_time_features, clean_geo_data, DL_FEATURES, cal_busmrt_dist
+from .feature_calc import calc_extra_features, calc_geo_time_features, clean_geo_data, DL_FEATURES, cal_busmrt_dist, \
+    check_sensor_data
 import pickle
 import os
 
@@ -60,8 +61,6 @@ def save_app_pt_df(window_size):
     # initialization
     features_pt = []
     labels_pt = []
-    lat_pt = []
-    lon_pt = []
     # process each [nid, date] pair, obtain data, calculate features, and process each trip
     num_iteration = len(unique_nid_date_with_tripnum)
 
@@ -127,36 +126,44 @@ def save_app_pt_df(window_size):
             # obtain part of the df of this particular trip
             df_cur_trip = data_frame_full.loc[data_frame_full['triplabel'] == tripnum].copy()
 
+            if check_sensor_data(df_cur_trip) is False:
+                logging.warning("*********Invalid Sensor Data for tripnum = " + str(tripnum) + "*********")
+                continue
+
             if len(df_cur_trip) < window_size:
                 logging.warning("*********Not Enough data for tripnum = " + str(tripnum) + "*********")
                 continue
 
             # get labels
-            if label_type == 'manual':
-                is_labeled_mask = np.array(
-                    [~np.isnan(np.float64(item)) for item in df_cur_trip['gt_mode_manual'].values])
-                label_pt_tmp = df_cur_trip['gt_mode_manual'].values[is_labeled_mask]
-            elif label_type == 'app':
-                is_labeled_mask = np.array([~np.isnan(np.float64(item)) for item in df_cur_trip['gt_mode_app'].values])
-                label_pt_tmp = df_cur_trip['gt_mode_app'].values[is_labeled_mask]
+            label_pt_tmp = df_cur_trip['gt_mode_app'].values
 
-            if len(label_pt_tmp) < window_size:
-                continue
             label_pt_tmp[(label_pt_tmp == 0) | (label_pt_tmp == 1)] = 0  # stationary
             label_pt_tmp[(label_pt_tmp == 3) | (label_pt_tmp == 2)] = 1  # walking
             label_pt_tmp[(label_pt_tmp == 4)] = 2  # train
             label_pt_tmp[(label_pt_tmp == 5)] = 3  # bus
             label_pt_tmp[(label_pt_tmp == 6)] = 4  # car
 
-            features_pt_tmp = df_cur_trip[DL_FEATURES].values[is_labeled_mask]
-            lat_pt += df_cur_trip['WLATITUDE'].values[is_labeled_mask].tolist()
-            lon_pt += df_cur_trip['WLONGITUDE'].values[is_labeled_mask].tolist()
+            # for those points without label
+            for i in range(len(label_pt_tmp)):
+                if label_pt_tmp[i] is None:
+                    # logging.info("there are nan in labels, replaced with -1")
+                    label_pt_tmp[i] = -1  # means no label
+                if np.isnan(label_pt_tmp[i]):
+                    # logging.info("there are nan in labels, replaced with -1")
+                    label_pt_tmp[i] = -1  # means no label
+
+            valid = label_pt_tmp[(label_pt_tmp != -1)]
+            if len(valid) < window_size:
+                logging.warning("Not enough valid labels for this trip")
+                continue
+
+            features_pt_tmp = df_cur_trip[DL_FEATURES]
             if len(features_pt_tmp) != len(label_pt_tmp):
                 logging.warning("the features are not matched with labels!!!!!!!!!!!!!!!!!!!!!!")
                 continue
 
             labels_pt += label_pt_tmp.tolist()
-            features_pt += features_pt_tmp.tolist()
+            features_pt += features_pt_tmp.values.tolist()
 
             trip_dict[trip_count] = len(features_pt)
             trip_count += 1

@@ -6,7 +6,8 @@ import params
 import pandas as pd
 from .dbConnPSQL import getLabelledDataWithNullAppLabel, getMainDataPSQL2016, getTripDataPSQL2016, \
     get_nids_with_app_label
-from .feature_calc import calc_extra_features, calc_geo_time_features, clean_geo_data, DL_FEATURES, cal_busmrt_dist
+from .feature_calc import calc_extra_features, calc_geo_time_features, clean_geo_data, DL_FEATURES, cal_busmrt_dist, \
+    check_sensor_data
 import pickle
 import os
 
@@ -131,6 +132,10 @@ def save_manual_pt_df(window_size):
             # obtain part of the df of this particular trip
             df_cur_trip = data_frame_full.loc[data_frame_full['triplabel'] == tripnum].copy()
 
+            if check_sensor_data(df_cur_trip) is False:
+                logging.warning("*********Invalid Sensor Data for tripnum = " + str(tripnum) + "*********")
+                continue
+
             if len(df_cur_trip) < window_size:
                 logging.warning("*********Not Enough data for tripnum = " + str(tripnum) + "*********")
                 continue
@@ -138,16 +143,16 @@ def save_manual_pt_df(window_size):
             # get labels
             label_pt_tmp = df_cur_trip['gt_mode_manual'].values
 
-            if None in label_pt_tmp.tolist():
-                logging.warning("The trip information is invalid")
-                continue
-
             label_pt_tmp[(label_pt_tmp == 3)] = 0  # walking or stationary
             label_pt_tmp[(label_pt_tmp == 4)] = 1  # train
             label_pt_tmp[(label_pt_tmp == 5)] = 2  # bus
             label_pt_tmp[(label_pt_tmp == 6)] = 3  # car
+
             # for those points without label
             for i in range(len(label_pt_tmp)):
+                if label_pt_tmp[i] is None:
+                    # logging.info("there are nan in labels, replaced with -1")
+                    label_pt_tmp[i] = -1  # means no label
                 if np.isnan(label_pt_tmp[i]):
                     # logging.info("there are nan in labels, replaced with -1")
                     label_pt_tmp[i] = -1  # means no label

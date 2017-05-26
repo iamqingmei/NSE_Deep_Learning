@@ -1,14 +1,16 @@
 """ all functions needed for calculating features for mode ID """
 
-import numpy as np
-import pandas as pd
-from util import chunks_real, chunks, great_circle_dist, get_hour_SGT, moving_std, moving_dr, moving_ave_velocity
-from util import apply_DBSCAN
-from . import TransitHeuristic
 import logging
 import random
 from collections import Counter
+
+import numpy as np
+import pandas as pd
+
 import params
+from utils.util import apply_DBSCAN
+from utils.util import chunks_real, chunks, great_circle_dist, get_hour_SGT, moving_std, moving_dr, moving_ave_velocity
+from . import TransitHeuristic
 
 DL_FEATURES = ['NID', 'MOV_AVE_VELOCITY', 'STDACC', 'MEANMAG', 'MAXGYR', 'PRESSURE', 'STDPRES_WIN', 'NUM_AP',
                'WLATITUDE', 'WLONGITUDE', 'is_localized', 'METRO_DIST', 'BUS_DIST', 'STEPS', 'NOISE', 'TIME_DELTA',
@@ -790,8 +792,14 @@ def cal_busmrt_dist(df, default_dist=-1):
             dist2all = [MRT[1] for MRT in close_mrt]
             df.set_value(i, 'METRO_DIST', min(dist2all))
 
-    df['STOP_10MIN'] = pd.Series([0] * len(df))
-    df['STOP_BUSSTOP_10MIN'] = pd.Series([0] * len(df))
+        # check if there are overflowed maxgyr
+        ########################################
+        cur_gyr_value = df['MAXGYR'].iloc[i]
+        if cur_gyr_value < -1:
+            df.set_value(i, 'MAXGYR', cur_gyr_value + 65536)
+
+    df['STOP_10MIN'] = pd.Series([0.0] * len(df))
+    df['STOP_BUSSTOP_10MIN'] = pd.Series([0.0] * len(df))
     df['STD_VELOCITY_10MIN'] = pd.Series([0.0] * len(df))
     vel_bus_dist_bool = []
     vel_bool = []
@@ -800,9 +808,9 @@ def cal_busmrt_dist(df, default_dist=-1):
     cur_count_busstop_stop = 0
     all_delta_time = 0
 
-    if df.iloc[0]['VELOCITY'] < params.BUS_VELOCITY_THRESHOLD:
+    if df.iloc[0]['VELOCITY'] < params.BUS_VELOCITY_THRESHOLD:  # if velocity is nan, (np.nan < 5.5) == false
         vel_bool.append(1)
-        if df.iloc[0]['BUS_DIST'] < params.NEAR_BUS_STOP_THRESHOLD:
+        if (df.iloc[0]['BUS_DIST'] < params.NEAR_BUS_STOP_THRESHOLD) and (df.iloc[0]['BUS_DIST'] != default_dist):
             vel_bus_dist_bool.append(1)
         else:
             vel_bus_dist_bool.append(0)
@@ -817,7 +825,7 @@ def cal_busmrt_dist(df, default_dist=-1):
 
         if df.iloc[i]['VELOCITY'] < params.BUS_VELOCITY_THRESHOLD:
             vel_bool.append(1)
-            if df.iloc[i]['BUS_DIST'] < params.NEAR_BUS_STOP_THRESHOLD:
+            if (df.iloc[i]['BUS_DIST'] < params.NEAR_BUS_STOP_THRESHOLD) and (df.iloc[i]['BUS_DIST'] != default_dist):
                 vel_bus_dist_bool.append(1)
             else:
                 vel_bus_dist_bool.append(0)
@@ -838,7 +846,10 @@ def cal_busmrt_dist(df, default_dist=-1):
 
         df.set_value(i, 'STD_VELOCITY_10MIN', np.nanstd(df.iloc[cur_start_idx - 1:i + 1]['VELOCITY'].tolist()))
         df.set_value(i, 'STOP_10MIN', cur_count_stop)
-        df.set_value(i, 'STOP_BUSSTOP_10MIN', cur_count_busstop_stop)
+        if cur_count_stop == 0:
+            df.set_value(i, 'STOP_BUSSTOP_10MIN', 0)
+        else:
+            df.set_value(i, 'STOP_BUSSTOP_10MIN', float(cur_count_busstop_stop)/float(cur_count_stop))
 
 
 def random_select_idx(labels_all_list, num_test, label_number):
@@ -862,3 +873,10 @@ def random_select_idx(labels_all_list, num_test, label_number):
         test_idx += random.sample(index_list_cur_label, num_test_for_each_label)
     test_idx = sorted(test_idx)
     return test_idx
+
+
+def check_sensor_data(trip_df):
+    for feature in ['MEANMAG', 'STDACC', 'MAXGYR']:
+        if len(trip_df[trip_df[feature] == -1]) != 0:
+            return False
+    return True

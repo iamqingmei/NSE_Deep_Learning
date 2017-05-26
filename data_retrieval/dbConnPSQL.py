@@ -1,13 +1,15 @@
 """ all functions needed for data transmission between PSQL """
 
-import psycopg2
-import logging
 import calendar
-import pandas as pd
-import numpy as np
-from util import chunks
+import logging
 from datetime import timedelta, datetime
+
+import numpy as np
+import pandas as pd
+import psycopg2
 import pytz
+
+from utils.util import chunks
 
 
 def insertTrainingInfo2016(conn, cur, tablename, data):
